@@ -60,7 +60,10 @@ sudo DEBIAN_FRONTEND=noninteractive sh -c "
 # ---------------------------------------------------------------------------
 
 cd "$WORKSPACE"
-meson setup build --buildtype=release
+# --wipe forces a clean reconfigure so a pre-existing build/ directory
+# (e.g. from a host build with different Qt version or sanitizer flags)
+# does not carry stale settings into the container environment.
+meson setup build --buildtype=release --wipe
 ninja -C build
 
 # ---------------------------------------------------------------------------
