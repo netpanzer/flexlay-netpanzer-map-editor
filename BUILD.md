@@ -89,7 +89,8 @@ which has all build tools and linuxdeploy pre-installed.
 ### Setup
 
 Copy `.env.example` to `.env` and set `HOSTUID`/`HOSTGID` to your own
-user so files created inside the container are not owned by root:
+user so the container's entrypoint runs the build as that user and output
+files are not owned by root:
 
 ```sh
 cp .env.example .env

@@ -7,7 +7,6 @@ services:
       WORKSPACE: /workspace
       DOCKER_BUILD: 1
     image: andy5995/linuxdeploy:v3-jammy
-    user: "${HOSTUID:-1000}:${HOSTGID:-1000}"
     volumes:
       - .:/workspace
     working_dir: /workspace
