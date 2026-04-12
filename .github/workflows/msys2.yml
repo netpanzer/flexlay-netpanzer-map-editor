@@ -62,8 +62,7 @@ jobs:
           mkdir -p _staging/platforms
           cp build/netpanzer-editor.exe _staging/
           bash packaging/windows/collect-dlls.sh _staging/netpanzer-editor.exe _staging/
-          PLUGINS=$(qmake -query QT_INSTALL_PLUGINS)
-          cp "$PLUGINS/platforms/qwindows.dll" _staging/platforms/
+          cp "$MINGW_PREFIX/share/qt5/plugins/platforms/qwindows.dll" _staging/platforms/
 
       - name: Set version
         shell: bash
