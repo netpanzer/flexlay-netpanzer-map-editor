@@ -351,9 +351,37 @@ static Map mapWithThumbnail(const Map& map, const Tileset* ts)
     return m;
 }
 
+// Returns true if the map passes basic playability checks, or the user
+// accepts the warnings and wants to save anyway.
+static bool warnIfUnplayable(QWidget* parent, const Map& m)
+{
+    int spawns   = 0;
+    int outposts = 0;
+    for (const auto& obj : m.objects) {
+        if (obj.type == "spawnpoint") ++spawns;
+        if (obj.type == "outpost")    ++outposts;
+    }
+
+    QStringList issues;
+    if (spawns == 0)
+        issues << "No spawn points — the game will crash on start.";
+    if (outposts == 0)
+        issues << "No outposts — there will be nothing to capture.";
+
+    if (issues.isEmpty()) return true;
+
+    const auto btn = QMessageBox::warning(
+        parent, "Map may be unplayable",
+        issues.join('\n') + "\n\nSave anyway?",
+        QMessageBox::Save | QMessageBox::Cancel,
+        QMessageBox::Cancel);
+    return btn == QMessageBox::Save;
+}
+
 void MainWindow::onSave()
 {
     if (m_currentFile.isEmpty()) { onSaveAs(); return; }
+    if (!warnIfUnplayable(this, m_view->map())) return;
 
     const Map m = mapWithThumbnail(m_view->map(), m_view->tileset());
 
@@ -391,6 +419,8 @@ void MainWindow::onSave()
 
 void MainWindow::onSaveAs()
 {
+    if (!warnIfUnplayable(this, m_view->map())) return;
+
     const QString fn = QFileDialog::getSaveFileName(
         this, "Save map as", m_currentFile,
         "netPanzer maps (*.npm);;Text maps (*.txt);;All files (*)");
