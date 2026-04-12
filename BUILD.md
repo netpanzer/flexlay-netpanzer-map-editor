@@ -50,12 +50,11 @@ ninja -C build
 ## Running
 
 ```sh
-NETPANZER_DATADIR=/path/to/netpanzer/data ./build/netpanzer-editor
+./build/netpanzer-editor
 ```
 
-`NETPANZER_DATADIR` must point to the netPanzer game data directory containing
-`maps/` and `wads/`. This is typically installed with the netpanzer game package
-or built from the netpanzer source.
+Use **File → Open** to open a `.npm` map file. The editor locates the tileset
+relative to the map file automatically.
 
 ## Testing
 
@@ -93,13 +92,7 @@ VERSION=0.1 docker compose up
 
 The resulting AppImage is written to `out/`.
 
-> [!CAUTION]
-> The AppImage does **not** bundle netPanzer game data. You must set
-> `NETPANZER_DATADIR` before launching:
->
-> ```sh
-> NETPANZER_DATADIR=/path/to/netpanzer/data ./out/netpanzer-editor-0.1-x86_64.AppImage
-> ```
+Launch the AppImage and use **File → Open** to open a `.npm` map file.
 
 ### Testing changes to `make-appimage.sh`
 

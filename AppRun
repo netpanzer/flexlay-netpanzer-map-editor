@@ -7,12 +7,4 @@ HERE="$(readlink -f "$(dirname "$0")")"
 # Bundled Qt and other shared libraries copied by linuxdeploy live in usr/lib/.
 export LD_LIBRARY_PATH="$HERE/usr/lib:${LD_LIBRARY_PATH}"
 
-# NETPANZER_DATADIR must point to the user's netpanzer game data (wads/,
-# maps/, etc.).  Warn if unset rather than silently failing to open tilesets.
-if [ -z "$NETPANZER_DATADIR" ]; then
-  echo "Warning: NETPANZER_DATADIR is not set." >&2
-  echo "Set it to the path of your netpanzer game data, e.g.:" >&2
-  echo "  NETPANZER_DATADIR=/usr/share/games/netpanzer $0" >&2
-fi
-
 exec "$HERE/usr/bin/netpanzer-editor" "$@"

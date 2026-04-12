@@ -30,7 +30,7 @@ Quick start:
 
   $ meson setup build
   $ ninja -C build
-  $ NETPANZER_DATADIR=/path/to/netpanzer/data ./build/netpanzer-editor
+  $ ./build/netpanzer-editor
 
 License
 -------
