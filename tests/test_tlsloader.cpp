@@ -2,13 +2,20 @@
 #include <QByteArray>
 #include <QFile>
 #include <QTemporaryDir>
+#include <cstdint>
 #include <cstring>
+#include <vector>
 
 #include "tlsloader.h"
 #include "npmformat.h"
 
 // ---------------------------------------------------------------------------
 // Helper: synthesise a minimal well-formed .tls binary.
+//
+// Built in a plain std::vector<uint8_t> so GCC's -Wstringop-overflow can
+// see the full allocation size when we do pointer arithmetic on buf.data().
+// (Using QByteArray::data() confuses GCC 12 because it tracks the pointer
+// origin through QTypedArrayData's 24-byte header rather than the heap slab.)
 
 static QByteArray makeTls(int tileCount, int tileW = 32, int tileH = 32)
 {
@@ -16,51 +23,45 @@ static QByteArray makeTls(int tileCount, int tileW = 32, int tileH = 32)
     const int pxOffset  = TLS_OFF_HEADERS + tileCount * 3;
     const int totalSize = pxOffset + tileCount * tileW * tileH;
 
-    QByteArray buf(totalSize, '\0');
+    std::vector<uint8_t> buf(totalSize, 0);
+
     auto writeU16 = [&](int off, uint16_t v) {
-        buf[off]     = char(v & 0xFF);
-        buf[off + 1] = char((v >> 8) & 0xFF);
+        buf[off]     = v & 0xFF;
+        buf[off + 1] = (v >> 8) & 0xFF;
     };
 
     // netp_id_header
     const char* hdr = "SyntheticTileset";
-    std::memcpy(buf.data() + 0, hdr, std::strlen(hdr));
+    std::memcpy(buf.data(), hdr, std::strlen(hdr));
 
     writeU16(TLS_OFF_VERSION,    1);
     writeU16(TLS_OFF_X_PIX,      uint16_t(tileW));
     writeU16(TLS_OFF_Y_PIX,      uint16_t(tileH));
     writeU16(TLS_OFF_TILE_COUNT, uint16_t(tileCount));
 
-    // Palette: set a few distinctive entries
-    // Palette is at TLS_OFF_PALETTE (72), 256 × RGB
-    {
-        unsigned char* pal = reinterpret_cast<unsigned char*>(buf.data()) + TLS_OFF_PALETTE;
-        // entry 0 → black
-        pal[0] = 0; pal[1] = 0; pal[2] = 0;
-        // entry 1 → red
-        pal[3] = 255; pal[4] = 0; pal[5] = 0;
-        // entry 2 → green
-        pal[6] = 0; pal[7] = 255; pal[8] = 0;
-        // entry 255 → white
-        pal[255*3] = 255; pal[255*3+1] = 255; pal[255*3+2] = 255;
-    }
+    // Palette: set a few distinctive entries at TLS_OFF_PALETTE (72), 256 × RGB
+    uint8_t* pal = buf.data() + TLS_OFF_PALETTE;
+    pal[0] = 0;   pal[1] = 0;   pal[2] = 0;    // entry 0 → black
+    pal[3] = 255; pal[4] = 0;   pal[5] = 0;    // entry 1 → red
+    pal[6] = 0;   pal[7] = 255; pal[8] = 0;    // entry 2 → green
+    pal[255*3] = 255; pal[255*3+1] = 255; pal[255*3+2] = 255;  // entry 255 → white
 
     // Tile headers: give each tile a distinct move_value cycling 0..5
     for (int i = 0; i < tileCount; ++i) {
         int off = TLS_OFF_HEADERS + i * 3;
-        buf[off]     = char(0);            // attrib
-        buf[off + 1] = char(i % 6);       // move_value
-        buf[off + 2] = char(i % 256);     // avg_color
+        buf[off]     = 0;              // attrib
+        buf[off + 1] = uint8_t(i % 6);   // move_value
+        buf[off + 2] = uint8_t(i % 256); // avg_color
     }
 
     // Pixel data: fill each tile with its own palette index (i % 256)
-    unsigned char* px = reinterpret_cast<unsigned char*>(buf.data()) + pxOffset;
+    uint8_t* px = buf.data() + pxOffset;
     const int pxPerTile = tileW * tileH;
     for (int i = 0; i < tileCount; ++i) {
         std::memset(px + i * pxPerTile, i % 256, size_t(pxPerTile));
     }
 
-    return buf;
+    return QByteArray(reinterpret_cast<char*>(buf.data()), totalSize);
 }
 
 static QString writeTempFile(const QByteArray& data, const QString& suffix)
