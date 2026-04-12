@@ -504,7 +504,8 @@ bool MainWindow::maybeSave()
         "The map has unsaved changes.\nDo you want to save before continuing?",
         QMessageBox::Save | QMessageBox::Discard | QMessageBox::Cancel);
     if (btn == QMessageBox::Cancel)  return false;
-    if (btn == QMessageBox::Save)    onSave();
+    if (btn == QMessageBox::Discard) return true;
+    onSave();
     return !m_modified; // false if the save itself was cancelled or failed
 }
 
