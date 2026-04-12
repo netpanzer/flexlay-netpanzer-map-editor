@@ -45,7 +45,8 @@ test_exe = executable('test_maploader',
   include_directories : include_directories('src'),
 )
 
-test('maploader', test_exe)
+test('maploader', test_exe,
+  env : ['LSAN_OPTIONS=suppressions=' + meson.source_root() / 'asan.supp'])
 
 tls_moc = qt5.preprocess(moc_sources : ['tests/test_tlsloader.cpp'])
 
@@ -57,4 +58,5 @@ tls_exe = executable('test_tlsloader',
   include_directories : include_directories('src'),
 )
 
-test('tlsloader', tls_exe)
+test('tlsloader', tls_exe,
+  env : ['LSAN_OPTIONS=suppressions=' + meson.source_root() / 'asan.supp'])
