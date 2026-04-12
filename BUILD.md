@@ -84,10 +84,26 @@ LSAN_OPTIONS=suppressions=$(pwd)/asan.supp ./build/netpanzer-editor
 
 The easiest way to produce a self-contained AppImage is via the
 `andy5995/linuxdeploy:v3-jammy` container (available on Docker Hub),
-which has all build tools and linuxdeploy pre-installed:
+which has all build tools and linuxdeploy pre-installed.
+
+### Setup
+
+Copy `.env.example` to `.env` and set `HOSTUID`/`HOSTGID` to your own
+user so files created inside the container are not owned by root:
 
 ```sh
-VERSION=0.1 docker compose up
+cp .env.example .env
+# Edit .env and set HOSTUID and HOSTGID, e.g.:
+#   HOSTUID=$(id -u)
+#   HOSTGID=$(id -g)
+```
+
+Also set `VERSION` in `.env` to the desired AppImage version string.
+
+### Building
+
+```sh
+docker compose run --rm build
 ```
 
 The resulting AppImage is written to `out/`.
