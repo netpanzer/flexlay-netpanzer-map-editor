@@ -35,6 +35,7 @@
 #include "tilemap_layer.hpp"
 #include "editor_map.hpp"
 #include "netpanzer.hpp"
+#include <dirent.h>
 
 NetPanzerData* NetPanzerData::instance_ = 0;
 
@@ -126,7 +127,29 @@ NetPanzerData::load_data(const std::string& datadir_)
   datadir = datadir_;
   std::cout << "NetPanzerData: Loading data from '" << datadir << "'" << std::endl;
   palette = load_palette(datadir + "/" + "wads/netp.act");
-  load_tileset(datadir + "/" + "wads/summer12mb.tls");
+  // Recursively search for the first summer12mb.tls file in wads/summer12mb/*
+  std::string tls_path;
+  std::string base_dir = datadir + "/wads/summer12mb/";
+  DIR* dir = opendir(base_dir.c_str());
+  if (dir) {
+    struct dirent* entry;
+    while ((entry = readdir(dir)) != nullptr) {
+      if (entry->d_type == DT_DIR && std::string(entry->d_name) != "." && std::string(entry->d_name) != "..") {
+        std::string candidate = base_dir + entry->d_name + "/summer12mb.tls";
+        std::ifstream f(candidate.c_str());
+        if (f.good()) {
+          tls_path = candidate;
+          break;
+        }
+      }
+    }
+    closedir(dir);
+  }
+  if (!tls_path.empty()) {
+    load_tileset(tls_path);
+  } else {
+    std::cout << "Couldn't find summer12mb.tls in any subdirectory of " << base_dir << std::endl;
+  }
 }
 
 CL_Surface

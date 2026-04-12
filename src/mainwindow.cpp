@@ -1,0 +1,463 @@
+#include "mainwindow.h"
+#include "mapview.h"
+#include "tilepanel.h"
+#include <QMenuBar>
+#include <QToolBar>
+#include <QStatusBar>
+#include <QLabel>
+#include <QFileDialog>
+#include <QMessageBox>
+#include <QInputDialog>
+#include <QDialog>
+#include <QDialogButtonBox>
+#include <QFormLayout>
+#include <QSpinBox>
+#include <QLineEdit>
+#include <QDir>
+#include <QFileInfo>
+#include <QDirIterator>
+#include <QKeySequence>
+
+// ---------------------------------------------------------------------------
+// Constructor
+
+MainWindow::MainWindow(QWidget* parent)
+    : QMainWindow(parent)
+{
+    setWindowTitle("netPanzer Map Editor");
+    resize(1280, 800);
+
+    m_view = new MapView(this);
+    setCentralWidget(m_view);
+
+    m_tilePanel = new TilePanel(this);
+    addDockWidget(Qt::RightDockWidgetArea, m_tilePanel);
+
+    setupMenus();
+    setupToolbar();
+    setupStatusBar();
+
+    connect(m_view, &MapView::tileHovered, this, &MainWindow::onTileHovered);
+    connect(m_view, &MapView::mapModified, this, &MainWindow::onMapModified);
+    connect(m_tilePanel, &TilePanel::tileSelected,
+            m_view, &MapView::setSelectedTile);
+}
+
+// ---------------------------------------------------------------------------
+// Menus
+
+void MainWindow::setupMenus()
+{
+    // File
+    QMenu* file = menuBar()->addMenu("&File");
+
+    QAction* newAct = file->addAction("&New Map…");
+    newAct->setShortcut(QKeySequence::New);
+    connect(newAct, &QAction::triggered, this, &MainWindow::onNewMap);
+
+    QAction* openAct = file->addAction("&Open…");
+    openAct->setShortcut(QKeySequence::Open);
+    connect(openAct, &QAction::triggered, this, &MainWindow::onOpen);
+
+    file->addSeparator();
+
+    m_saveAct = file->addAction("&Save");
+    m_saveAct->setShortcut(QKeySequence::Save);
+    m_saveAct->setEnabled(false);
+    connect(m_saveAct, &QAction::triggered, this, &MainWindow::onSave);
+
+    QAction* saveAsAct = file->addAction("Save &As…");
+    saveAsAct->setShortcut(QKeySequence::SaveAs);
+    connect(saveAsAct, &QAction::triggered, this, &MainWindow::onSaveAs);
+
+    file->addSeparator();
+
+    QAction* loadTsAct = file->addAction("Load &Tileset…");
+    connect(loadTsAct, &QAction::triggered, this, &MainWindow::onLoadTileset);
+
+    file->addSeparator();
+
+    QAction* quitAct = file->addAction("&Quit");
+    quitAct->setShortcut(QKeySequence::Quit);
+    connect(quitAct, &QAction::triggered, this, &QWidget::close);
+
+    // Edit
+    QMenu* edit = menuBar()->addMenu("&Edit");
+
+    m_undoAct = edit->addAction("&Undo");
+    m_undoAct->setShortcut(QKeySequence::Undo);
+    m_undoAct->setEnabled(false);
+    connect(m_undoAct, &QAction::triggered, this, &MainWindow::onUndo);
+
+    m_redoAct = edit->addAction("&Redo");
+    m_redoAct->setShortcut(QKeySequence::Redo);
+    m_redoAct->setEnabled(false);
+    connect(m_redoAct, &QAction::triggered, this, &MainWindow::onRedo);
+
+    // View
+    QMenu* view = menuBar()->addMenu("&View");
+
+    m_editToggle = view->addAction("&Edit Mode");
+    m_editToggle->setCheckable(true);
+    m_editToggle->setShortcut(Qt::Key_E);
+    connect(m_editToggle, &QAction::toggled, this, &MainWindow::onToggleEdit);
+
+    QAction* gridToggle = view->addAction("Show &Grid");
+    gridToggle->setCheckable(true);
+    gridToggle->setChecked(true);
+    gridToggle->setShortcut(Qt::Key_G);
+    connect(gridToggle, &QAction::toggled, this, &MainWindow::onToggleGrid);
+
+    view->addSeparator();
+
+    QAction* fitAct = view->addAction("&Fit to Window");
+    fitAct->setShortcut(Qt::Key_F);
+    connect(fitAct, &QAction::triggered, this, &MainWindow::onFitToWindow);
+
+    QAction* zoomInAct = view->addAction("Zoom &In");
+    zoomInAct->setShortcut(QKeySequence::ZoomIn);
+    connect(zoomInAct, &QAction::triggered, this, &MainWindow::onZoomIn);
+
+    QAction* zoomOutAct = view->addAction("Zoom &Out");
+    zoomOutAct->setShortcut(QKeySequence::ZoomOut);
+    connect(zoomOutAct, &QAction::triggered, this, &MainWindow::onZoomOut);
+
+    view->addSeparator();
+
+    QAction* tilePanelAct = m_tilePanel->toggleViewAction();
+    tilePanelAct->setText("&Tile Panel");
+    view->addAction(tilePanelAct);
+}
+
+// ---------------------------------------------------------------------------
+// Toolbar
+
+void MainWindow::setupToolbar()
+{
+    QToolBar* tb = addToolBar("Main");
+    tb->setMovable(false);
+
+    tb->addAction("Fit",     this, &MainWindow::onFitToWindow);
+    tb->addAction("Zoom In", this, &MainWindow::onZoomIn);
+    tb->addAction("Zoom Out",this, &MainWindow::onZoomOut);
+    tb->addSeparator();
+
+    auto* editBtn = tb->addAction("Edit Mode");
+    editBtn->setCheckable(true);
+    connect(editBtn, &QAction::toggled, m_editToggle, &QAction::setChecked);
+    connect(m_editToggle, &QAction::toggled, editBtn,  &QAction::setChecked);
+}
+
+// ---------------------------------------------------------------------------
+// Status bar
+
+void MainWindow::setupStatusBar()
+{
+    m_statusTile = new QLabel("No map");
+    m_statusZoom = new QLabel("Zoom: 100%");
+    statusBar()->addPermanentWidget(m_statusTile);
+    statusBar()->addPermanentWidget(m_statusZoom);
+}
+
+// ---------------------------------------------------------------------------
+// Title / dirty flag
+
+void MainWindow::updateTitle()
+{
+    QString title = "netPanzer Map Editor";
+    if (!m_currentFile.isEmpty()) {
+        title += " — " + QFileInfo(m_currentFile).fileName();
+        if (m_modified) title += " *";
+    }
+    setWindowTitle(title);
+}
+
+void MainWindow::setCurrentFile(const QString& path)
+{
+    m_currentFile = path;
+    m_modified    = false;
+    m_saveAct->setEnabled(!path.isEmpty());
+    updateTitle();
+}
+
+// ---------------------------------------------------------------------------
+// Tileset search
+
+QString MainWindow::findTileset(const QString& mapPath,
+                                const QString& tileSetName) const
+{
+    if (tileSetName.isEmpty()) return {};
+
+    const QFileInfo mapInfo(mapPath);
+    const QString mapDir = mapInfo.absoluteDir().absolutePath();
+
+    // 1. Same directory as map
+    {
+        const QString candidate = mapDir + "/" + tileSetName;
+        if (QFileInfo::exists(candidate)) return candidate;
+    }
+
+    // 2. ../wads/<tileset-base>/*/<tileSetName>  (netpanzer data layout)
+    {
+        const QString base = QFileInfo(tileSetName).baseName();
+        const QDir wadsDir(mapDir + "/../wads/" + base);
+        if (wadsDir.exists()) {
+            QDirIterator it(wadsDir.absolutePath(), {tileSetName},
+                            QDir::Files, QDirIterator::Subdirectories);
+            if (it.hasNext()) return it.next();
+        }
+    }
+
+    // 3. Walk up to find a "wads" directory
+    {
+        QDir dir(mapDir);
+        for (int i = 0; i < 5; ++i) {
+            if (!dir.cdUp()) break;
+            const QString base = QFileInfo(tileSetName).baseName();
+            QDirIterator it(dir.filePath("wads/" + base), {tileSetName},
+                            QDir::Files, QDirIterator::Subdirectories);
+            if (it.hasNext()) return it.next();
+        }
+    }
+
+    return {};
+}
+
+void MainWindow::applyTileset()
+{
+    if (m_tileset.isValid()) {
+        m_view->setTileset(&m_tileset);
+        m_tilePanel->setTileset(&m_tileset);
+    } else {
+        m_view->setTileset(nullptr);
+        m_tilePanel->setTileset(nullptr);
+    }
+}
+
+// ---------------------------------------------------------------------------
+// File actions
+
+void MainWindow::onOpen()
+{
+    const QString fn = QFileDialog::getOpenFileName(
+        this, "Open map", m_currentFile,
+        "netPanzer maps (*.npm);;Text maps (*.txt);;All files (*)");
+    if (fn.isEmpty()) return;
+
+    Map m = MapLoader::load(fn);
+    if (!m.isValid()) {
+        QMessageBox::warning(this, "Open failed",
+                             "Could not load map from:\n" + fn);
+        return;
+    }
+
+    m_view->setMap(m);
+    setCurrentFile(fn);
+    m_undoAct->setEnabled(false);
+    m_redoAct->setEnabled(false);
+
+    // Auto-detect tileset
+    const QString tsPath = findTileset(fn, m.tileSetName);
+    if (!tsPath.isEmpty()) {
+        if (m_tileset.load(tsPath)) {
+            applyTileset();
+            statusBar()->showMessage("Tileset loaded: " + tsPath, 4000);
+        }
+    } else if (!m.tileSetName.isEmpty()) {
+        statusBar()->showMessage(
+            "Tileset not found: " + m.tileSetName +
+            "  — use File → Load Tileset to locate it.", 8000);
+    }
+
+    m_view->fitToWindow();
+}
+
+void MainWindow::onSave()
+{
+    if (m_currentFile.isEmpty()) { onSaveAs(); return; }
+
+    if (m_currentFile.endsWith(".npm", Qt::CaseInsensitive)) {
+        const QString newPath = m_currentFile + ".new";
+        bool ok = MapLoader::saveNpmVerified(m_currentFile, m_view->map(), false);
+        if (!ok) {
+            QMessageBox::warning(this, "Save failed",
+                                 "Failed to write verified .npm to:\n" + newPath);
+            return;
+        }
+        const auto btn = QMessageBox::question(
+            this, "Replace original?",
+            "Verified map written to:\n" + newPath +
+            "\n\nReplace original? (backup created as .bak)",
+            QMessageBox::Yes | QMessageBox::No);
+        if (btn == QMessageBox::Yes) {
+            if (!MapLoader::saveNpmVerified(m_currentFile, m_view->map(), true))
+                QMessageBox::warning(this, "Replace failed",
+                                     "Could not replace original. Check " + newPath);
+            else {
+                m_modified = false;
+                updateTitle();
+            }
+        }
+    } else {
+        if (!MapLoader::saveText(m_currentFile, m_view->map())) {
+            QMessageBox::warning(this, "Save failed",
+                                 "Failed to write to:\n" + m_currentFile);
+            return;
+        }
+        m_modified = false;
+        updateTitle();
+    }
+}
+
+void MainWindow::onSaveAs()
+{
+    const QString fn = QFileDialog::getSaveFileName(
+        this, "Save map as", m_currentFile,
+        "netPanzer maps (*.npm);;Text maps (*.txt);;All files (*)");
+    if (fn.isEmpty()) return;
+
+    bool ok = fn.endsWith(".npm", Qt::CaseInsensitive)
+              ? MapLoader::saveNpm(fn, m_view->map())
+              : MapLoader::saveText(fn, m_view->map());
+
+    if (!ok)
+        QMessageBox::warning(this, "Save failed", "Failed to write:\n" + fn);
+    else {
+        setCurrentFile(fn);
+        statusBar()->showMessage("Saved: " + fn, 3000);
+    }
+}
+
+void MainWindow::onNewMap()
+{
+    QDialog dlg(this);
+    dlg.setWindowTitle("New Map");
+
+    auto* layout = new QFormLayout(&dlg);
+
+    auto* nameEdit = new QLineEdit("Unnamed");
+    auto* wSpin    = new QSpinBox();  wSpin->setRange(16, 4096); wSpin->setValue(128);
+    auto* hSpin    = new QSpinBox();  hSpin->setRange(16, 4096); hSpin->setValue(128);
+    auto* tsEdit   = new QLineEdit("summer12mb.tls");
+
+    layout->addRow("Name:",    nameEdit);
+    layout->addRow("Width:",   wSpin);
+    layout->addRow("Height:",  hSpin);
+    layout->addRow("Tileset:", tsEdit);
+
+    auto* buttons = new QDialogButtonBox(
+        QDialogButtonBox::Ok | QDialogButtonBox::Cancel);
+    layout->addRow(buttons);
+    connect(buttons, &QDialogButtonBox::accepted, &dlg, &QDialog::accept);
+    connect(buttons, &QDialogButtonBox::rejected, &dlg, &QDialog::reject);
+
+    if (dlg.exec() != QDialog::Accepted) return;
+
+    Map m;
+    m.width      = wSpin->value();
+    m.height     = hSpin->value();
+    m.name       = nameEdit->text();
+    m.tileSetName = tsEdit->text();
+    m.tiles.assign(size_t(m.width * m.height), 0);
+
+    m_view->setMap(m);
+    setCurrentFile({});
+    m_undoAct->setEnabled(false);
+    m_redoAct->setEnabled(false);
+    m_modified = false;
+    updateTitle();
+}
+
+void MainWindow::onLoadTileset()
+{
+    const QString fn = QFileDialog::getOpenFileName(
+        this, "Load tileset", {},
+        "netPanzer tilesets (*.tls);;All files (*)");
+    if (fn.isEmpty()) return;
+
+    if (!m_tileset.load(fn)) {
+        QMessageBox::warning(this, "Load failed",
+                             "Could not load tileset from:\n" + fn);
+        return;
+    }
+    applyTileset();
+    statusBar()->showMessage("Tileset loaded: " + fn, 4000);
+}
+
+// ---------------------------------------------------------------------------
+// Edit actions
+
+void MainWindow::onUndo()
+{
+    m_view->undo();
+    m_undoAct->setEnabled(m_view->canUndo());
+    m_redoAct->setEnabled(m_view->canRedo());
+}
+
+void MainWindow::onRedo()
+{
+    m_view->redo();
+    m_undoAct->setEnabled(m_view->canUndo());
+    m_redoAct->setEnabled(m_view->canRedo());
+}
+
+// ---------------------------------------------------------------------------
+// View actions
+
+void MainWindow::onToggleEdit(bool checked)
+{
+    m_view->enableEditing(checked);
+    statusBar()->showMessage(checked ? "Edit mode ON" : "Edit mode OFF", 2000);
+}
+
+void MainWindow::onToggleGrid(bool checked)
+{
+    m_view->setShowGrid(checked);
+}
+
+void MainWindow::onFitToWindow()
+{
+    m_view->fitToWindow();
+    m_statusZoom->setText(QString("Zoom: %1%").arg(int(m_view->zoom() * 100)));
+}
+
+void MainWindow::onZoomIn()
+{
+    m_view->setZoom(m_view->zoom() * 1.25);
+    m_statusZoom->setText(QString("Zoom: %1%").arg(int(m_view->zoom() * 100)));
+}
+
+void MainWindow::onZoomOut()
+{
+    m_view->setZoom(m_view->zoom() / 1.25);
+    m_statusZoom->setText(QString("Zoom: %1%").arg(int(m_view->zoom() * 100)));
+}
+
+// ---------------------------------------------------------------------------
+// Status bar updates
+
+void MainWindow::onTileHovered(int tx, int ty, int tileId)
+{
+    QString msg = QString("Tile (%1, %2)  id=%3").arg(tx).arg(ty).arg(tileId);
+    if (m_tileset.isValid() && tileId < m_tileset.tileCount()) {
+        const TileHeader& h = m_tileset.header(tileId);
+        const char* moveStr =
+            h.move_value == 0 ? "road" :
+            h.move_value == 1 ? "ground" :
+            h.move_value == 4 ? "impassable" :
+            h.move_value == 5 ? "water" : "?";
+        msg += QString("  move=%1").arg(moveStr);
+    }
+    m_statusTile->setText(msg);
+    m_statusZoom->setText(QString("Zoom: %1%").arg(int(m_view->zoom() * 100)));
+}
+
+void MainWindow::onMapModified()
+{
+    if (!m_modified) {
+        m_modified = true;
+        updateTitle();
+    }
+    m_undoAct->setEnabled(m_view->canUndo());
+    m_redoAct->setEnabled(m_view->canRedo());
+}
