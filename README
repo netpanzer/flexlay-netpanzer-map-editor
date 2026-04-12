@@ -15,12 +15,6 @@ Features
 - Zoom toward cursor
 - Keyboard shortcuts: T (tile paint), O (place outpost), S (spawn point), V (select)
 
-Requirements
-------------
-
-- netPanzer game data (maps/, wads/) — not bundled here
-  Typically installed via your package manager or built from source.
-
 Building
 --------
 
