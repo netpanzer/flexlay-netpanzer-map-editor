@@ -50,6 +50,7 @@ sudo DEBIAN_FRONTEND=noninteractive sh -c "
     ninja-build \
     qtbase5-dev \
     qtbase5-dev-tools \
+    qttools5-dev-tools \
     libqt5gui5 \
     pkg-config \
     patchelf \
