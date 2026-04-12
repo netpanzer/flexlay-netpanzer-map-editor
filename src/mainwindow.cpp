@@ -2,6 +2,7 @@
 #include "mapview.h"
 #include "tilepanel.h"
 #include "minimap.h"
+#include "maploader.h"
 #include <QMenuBar>
 #include <QToolBar>
 #include <QStatusBar>
@@ -320,12 +321,37 @@ void MainWindow::onOpen()
     m_view->fitToWindow();
 }
 
+// Build a copy of the current map with the thumbnail populated from the
+// tileset's avg_color values.  netPanzer's map browser requires a non-zero
+// thumbnail (width × height palette-indexed bytes) to list the map.
+// For maps loaded from an existing .npm the thumbnail is already present;
+// this only fills it in for new maps or maps with a missing thumbnail.
+static Map mapWithThumbnail(const Map& map, const Tileset* ts)
+{
+    Map m = map;
+    if (m.thumbW == 0 || m.thumbH == 0 || int(m.thumbnail.size()) < m.width * m.height) {
+        m.thumbW = uint16_t(m.width);
+        m.thumbH = uint16_t(m.height);
+        const int n = m.width * m.height;
+        m.thumbnail.resize(n);
+        for (int i = 0; i < n; ++i) {
+            const uint16_t tid = m.tiles[size_t(i)];
+            m.thumbnail[i] = (ts && int(tid) < ts->tileCount())
+                              ? char(uint8_t(ts->header(int(tid)).avg_color))
+                              : char(0);
+        }
+    }
+    return m;
+}
+
 void MainWindow::onSave()
 {
     if (m_currentFile.isEmpty()) { onSaveAs(); return; }
 
+    const Map m = mapWithThumbnail(m_view->map(), m_view->tileset());
+
     if (m_currentFile.endsWith(".npm", Qt::CaseInsensitive)) {
-        const bool ok = MapLoader::saveNpmVerified(m_currentFile, m_view->map(), false);
+        const bool ok = MapLoader::saveNpmVerified(m_currentFile, m, false);
         if (!ok) {
             QMessageBox::warning(this, "Save failed",
                                  "Failed to write verified .npm to:\n" + m_currentFile + ".new");
@@ -337,13 +363,13 @@ void MainWindow::onSave()
             "\n\nReplace original? (backup created as .bak)",
             QMessageBox::Yes | QMessageBox::No);
         if (btn == QMessageBox::Yes) {
-            if (!MapLoader::saveNpmVerified(m_currentFile, m_view->map(), true))
+            if (!MapLoader::saveNpmVerified(m_currentFile, m, true))
                 QMessageBox::warning(this, "Replace failed",
                                      "Could not replace original. See " + m_currentFile + ".new");
             else { m_modified = false; updateTitle(); }
         }
     } else {
-        if (!MapLoader::saveText(m_currentFile, m_view->map())) {
+        if (!MapLoader::saveText(m_currentFile, m)) {
             QMessageBox::warning(this, "Save failed", "Failed to write:\n" + m_currentFile);
             return;
         }
@@ -359,9 +385,10 @@ void MainWindow::onSaveAs()
         "netPanzer maps (*.npm);;Text maps (*.txt);;All files (*)");
     if (fn.isEmpty()) return;
 
+    const Map m = mapWithThumbnail(m_view->map(), m_view->tileset());
     const bool ok = fn.endsWith(".npm", Qt::CaseInsensitive)
-                    ? MapLoader::saveNpm(fn, m_view->map())
-                    : MapLoader::saveText(fn, m_view->map());
+                    ? MapLoader::saveNpm(fn, m)
+                    : MapLoader::saveText(fn, m);
     if (!ok)
         QMessageBox::warning(this, "Save failed", "Failed to write:\n" + fn);
     else {
