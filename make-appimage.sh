@@ -56,51 +56,24 @@ sudo DEBIAN_FRONTEND=noninteractive sh -c "
 "
 
 # ---------------------------------------------------------------------------
-# Build
+# Build and install into AppDir
 # ---------------------------------------------------------------------------
 
 cd "$WORKSPACE"
 # --wipe forces a clean reconfigure so a pre-existing build/ directory
 # (e.g. from a host build with different Qt version or sanitizer flags)
 # does not carry stale settings into the container environment.
-meson setup build --buildtype=release --wipe
+meson setup build --buildtype=release --wipe --prefix=/usr
 ninja -C build
 
-# ---------------------------------------------------------------------------
-# Populate AppDir
-# ---------------------------------------------------------------------------
-
-install -Dm755 "$WORKSPACE/build/netpanzer-editor" \
-  "$APPDIR/usr/bin/netpanzer-editor"
-
-# Desktop entry
-mkdir -p "$APPDIR/usr/share/applications"
-cat > "$APPDIR/usr/share/applications/netpanzer-editor.desktop" <<DESKTOP
-[Desktop Entry]
-Name=NetPanzer Map Editor
-Comment=Map editor for the NetPanzer game
-Exec=netpanzer-editor
-Icon=netpanzer-editor
-Type=Application
-Categories=Game;
-DESKTOP
-
-# Icon — use a 24x24 stock icon as a stand-in application icon
-install -Dm644 "$WORKSPACE/data/images/icons24/stock_save.png" \
-  "$APPDIR/usr/share/pixmaps/netpanzer-editor.png"
-
-DOCDIR="$APPDIR/usr/share/doc/netpanzer-editor"
-mkdir -p "$DOCDIR"
-
-# Project license (GPL v3)
-install -Dm644 "$WORKSPACE/COPYING" "$DOCDIR/LICENSE"
-install -Dm644 "$WORKSPACE/README"  "$DOCDIR/README"
+# Install binary, desktop file, icon, and docs directly into the AppDir.
+# meson respects --prefix=/usr and DESTDIR so files land under $APPDIR/usr/.
+meson install -C build --destdir "$APPDIR"
 
 # ---------------------------------------------------------------------------
 # linuxdeploy — bundle shared library dependencies (Qt5 + system libs)
 # ---------------------------------------------------------------------------
 
-cd "$WORKSPACE"
 OUT_DIR="$WORKSPACE/out"
 mkdir -p "$OUT_DIR"
 cd "$OUT_DIR"
@@ -114,7 +87,8 @@ linuxdeploy \
   --desktop-file "$APPDIR/usr/share/applications/netpanzer-editor.desktop" \
   --icon-file "$APPDIR/usr/share/pixmaps/netpanzer-editor.png" \
   --icon-filename netpanzer-editor \
-  --custom-apprun "$WORKSPACE/AppRun"
+  --custom-apprun "$WORKSPACE/AppRun" \
+  --plugin qt
 
 # ---------------------------------------------------------------------------
 # Pack the AppImage

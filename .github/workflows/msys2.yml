@@ -54,7 +54,7 @@ jobs:
       - name: Test
         shell: msys2 {0}
         run: |
-          QT_QPA_PLATFORM=offscreen meson test -C build --print-errorlogs
+          meson test -C build --print-errorlogs
 
       - name: Stage installer files
         shell: msys2 {0}

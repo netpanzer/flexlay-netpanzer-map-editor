@@ -59,6 +59,4 @@ jobs:
           ninja -C build
 
       - name: Test
-        env:
-          QT_QPA_PLATFORM: offscreen
         run: meson test -C build --print-errorlogs

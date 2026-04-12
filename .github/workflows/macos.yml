@@ -37,4 +37,4 @@ jobs:
       - name: Test
         run: |
           export PKG_CONFIG_PATH="$(brew --prefix qt@5)/lib/pkgconfig"
-          QT_QPA_PLATFORM=offscreen meson test -C build --print-errorlogs
+          meson test -C build --print-errorlogs

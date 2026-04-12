@@ -27,10 +27,26 @@ editor_sources = [
 ]
 
 executable('netpanzer-editor',
-  sources      : editor_sources + moc_files,
-  dependencies : qt5_dep,
+  sources             : editor_sources + moc_files,
+  dependencies        : qt5_dep,
   include_directories : include_directories('src'),
+  install             : true,
 )
+
+# ---------------------------------------------------------------------------
+# Install — Linux only (Windows packaging is handled by the Inno Setup installer)
+
+if host_machine.system() == 'linux'
+  install_data('netpanzer-editor.desktop',
+    install_dir : get_option('datadir') / 'applications')
+
+  install_data('data/images/icons24/stock_save.png',
+    install_dir : get_option('datadir') / 'pixmaps',
+    rename      : 'netpanzer-editor.png')
+
+  install_data(['COPYING', 'README'],
+    install_dir : get_option('datadir') / 'doc' / 'netpanzer-editor')
+endif
 
 # ---------------------------------------------------------------------------
 # Tests
@@ -59,4 +75,7 @@ tls_exe = executable('test_tlsloader',
 )
 
 test('tlsloader', tls_exe,
-  env : ['LSAN_OPTIONS=suppressions=' + meson.source_root() / 'asan.supp'])
+  env : [
+    'LSAN_OPTIONS=suppressions=' + meson.source_root() / 'asan.supp',
+    'QT_QPA_PLATFORM=offscreen',
+  ])
