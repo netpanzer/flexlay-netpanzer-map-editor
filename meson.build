@@ -1,5 +1,6 @@
 project('netpanzer-map-editor', 'cpp',
   version : '0.1',
+  meson_version : '>= 0.61.0',
   default_options : ['cpp_std=c++17', 'warning_level=3']
 )
 
