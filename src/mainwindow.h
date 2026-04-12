@@ -3,11 +3,14 @@
 #include <QString>
 #include "maploader.h"
 #include "tlsloader.h"
+#include "mapview.h"   // for Tool enum
 
 class MapView;
 class TilePanel;
+class Minimap;
 class QLabel;
 class QAction;
+class QActionGroup;
 
 class MainWindow : public QMainWindow {
     Q_OBJECT
@@ -22,13 +25,17 @@ private slots:
     void onLoadTileset();
     void onUndo();
     void onRedo();
-    void onToggleEdit(bool checked);
+    void onSetTool(Tool t);
     void onToggleGrid(bool checked);
     void onFitToWindow();
     void onZoomIn();
     void onZoomOut();
     void onTileHovered(int tx, int ty, int tileId);
     void onMapModified();
+    void onObjectSelectionChanged(int idx);
+    void onObjectActivated(int idx);
+    void onViewportChanged(const QRectF& tileRect);
+    void onMinimapPan(QPointF tilePt);
 
 private:
     void setupMenus();
@@ -37,21 +44,22 @@ private:
     void setCurrentFile(const QString& path);
     void updateTitle();
     void applyTileset();
-    // Try to find the tileset file from the map's tileSetName alongside the map.
     QString findTileset(const QString& mapPath, const QString& tileSetName) const;
 
-    MapView*   m_view     = nullptr;
-    TilePanel* m_tilePanel = nullptr;
-    QLabel*    m_statusTile = nullptr;
-    QLabel*    m_statusZoom = nullptr;
+    MapView*      m_view      = nullptr;
+    TilePanel*    m_tilePanel = nullptr;
+    Minimap*      m_minimap   = nullptr;
+    QLabel*       m_statusTile = nullptr;
+    QLabel*       m_statusZoom = nullptr;
+    QLabel*       m_statusObj  = nullptr;
 
-    QAction*   m_undoAct  = nullptr;
-    QAction*   m_redoAct  = nullptr;
-    QAction*   m_saveAct  = nullptr;
-    QAction*   m_editToggle = nullptr;
+    QAction*      m_undoAct   = nullptr;
+    QAction*      m_redoAct   = nullptr;
+    QAction*      m_saveAct   = nullptr;
+    QActionGroup* m_toolGroup = nullptr;
 
-    QString    m_currentFile;
-    bool       m_modified = false;
+    QString m_currentFile;
+    bool    m_modified = false;
 
-    Tileset    m_tileset;
+    Tileset m_tileset;
 };

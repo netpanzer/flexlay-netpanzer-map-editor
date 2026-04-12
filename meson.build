@@ -12,6 +12,7 @@ moc_headers = [
   'src/mapview.h',
   'src/tilepanel.h',
   'src/mainwindow.h',
+  'src/minimap.h',
 ]
 moc_files = qt5.preprocess(moc_headers : moc_headers)
 
@@ -22,6 +23,7 @@ editor_sources = [
   'src/tlsloader.cpp',
   'src/tilepanel.cpp',
   'src/mainwindow.cpp',
+  'src/minimap.cpp',
 ]
 
 executable('netpanzer-editor',
@@ -44,3 +46,15 @@ test_exe = executable('test_maploader',
 )
 
 test('maploader', test_exe)
+
+tls_moc = qt5.preprocess(moc_sources : ['tests/test_tlsloader.cpp'])
+
+qt5_test_gui_dep = dependency('qt5', modules : ['Core', 'Gui', 'Test'])
+
+tls_exe = executable('test_tlsloader',
+  sources : ['tests/test_tlsloader.cpp', 'src/tlsloader.cpp'] + tls_moc,
+  dependencies : qt5_test_gui_dep,
+  include_directories : include_directories('src'),
+)
+
+test('tlsloader', tls_exe)
