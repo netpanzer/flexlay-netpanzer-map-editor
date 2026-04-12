@@ -1,20 +1,9 @@
-# Build directories
+# Meson build directory and AppImage output
 /build/
 /out/
 
-# Meson generated files
+# Meson-generated MOC files (can appear in src/ with in-source builds)
 *.moc
 
-# SCons artifacts (kept for history, no longer built)
-*.o
-*.a
-/.sconsign.dblite
-/external/clanlib/.sconsign.dblite
-build.log
-/netpanzer/netpanzer_wrap.cpp
-/netpanzer/netpanzer_wrap.tmp.cpp
-/netpanzer/netpanzer_wrap.so
-/netpanzer/*.os
-/ruby/flexlay_ruby_wrap.cpp
-/ruby/flexlay_wrap.so
-/ruby/*.os
+# Windows installer staging directory
+/_staging/
