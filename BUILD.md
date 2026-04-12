@@ -17,10 +17,33 @@ sudo dnf install gcc-c++ meson ninja-build qt5-qtbase-devel pkg-config
 sudo pacman -S base-devel meson qt5-base
 ```
 
+**macOS (Homebrew):**
+```sh
+brew install meson ninja qt@5
+```
+
 ## Building
 
+**Linux / macOS:**
 ```sh
 meson setup build
+ninja -C build
+```
+
+On macOS, if meson cannot find Qt5, add it to your PATH first:
+```sh
+export PATH="$(brew --prefix qt@5)/bin:$PATH"
+```
+
+**MSYS2 (MINGW64):**
+```sh
+meson setup build
+ninja -C build
+```
+
+**MSVC (from a Developer Command Prompt):**
+```sh
+meson setup build --backend=ninja
 ninja -C build
 ```
 
@@ -38,6 +61,24 @@ or built from the netpanzer source.
 
 ```sh
 meson test -C build --print-errorlogs
+```
+
+## AddressSanitizer
+
+ASan/UBSan are **not** enabled by default. To opt in:
+
+```sh
+meson setup build -Db_sanitize=address,undefined
+ninja -C build
+```
+
+Known third-party leaks from fontconfig/Pango/GTK3 are suppressed via `asan.supp`.
+`meson test` picks up the suppressions automatically via `LSAN_OPTIONS`.
+
+To run the editor with suppression active:
+
+```sh
+LSAN_OPTIONS=suppressions=$(pwd)/asan.supp ./build/netpanzer-editor
 ```
 
 ## AppImage via Docker
@@ -69,15 +110,3 @@ docker compose -f docker-compose.dev.yml run --rm build
 ```
 
 From there you can run `./make-appimage.sh` directly or step through it manually.
-
-## AddressSanitizer
-
-The Meson build enables ASan/UBSan by default (configured in `meson.build`).
-Known third-party leaks from fontconfig/Pango/GTK3 are suppressed via `asan.supp`.
-`meson test` picks up the suppressions automatically via `LSAN_OPTIONS`.
-
-To run the editor with suppression:
-
-```sh
-LSAN_OPTIONS=suppressions=$(pwd)/asan.supp ./build/netpanzer-editor
-```
