@@ -303,9 +303,11 @@ bool MapLoader::saveNpm(const QString& path, const Map& m)
         return false;
     f.close();
 
-    // Companion files
+    // Companion files — strip .npm.new or .npm to get the base name
     QString base = path;
-    if (base.endsWith(".npm", Qt::CaseInsensitive))
+    if (base.endsWith(".npm.new", Qt::CaseInsensitive))
+        base = base.chopped(8);
+    else if (base.endsWith(".npm", Qt::CaseInsensitive))
         base = base.chopped(4);
     writeOptSpn(base, m);
     return true;
