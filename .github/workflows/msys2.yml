@@ -1,0 +1,47 @@
+name: MSYS2
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.sha }}
+  cancel-in-progress: true
+
+on:
+  push:
+    branches: [main, qt-port]
+    paths:
+      - '**'
+      - '!**.md'
+      - '**/msys2.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - '**'
+      - '!**.md'
+      - '**/msys2.yml'
+
+jobs:
+  build:
+    runs-on: windows-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: msys2/setup-msys2@v2
+        with:
+          msystem: MINGW64
+          update: true
+          install: >-
+            mingw-w64-x86_64-gcc
+            mingw-w64-x86_64-meson
+            mingw-w64-x86_64-ninja
+            mingw-w64-x86_64-qt5-base
+            mingw-w64-x86_64-pkg-config
+
+      - name: Build
+        shell: msys2 {0}
+        run: |
+          meson setup build
+          ninja -C build
+
+      - name: Test
+        shell: msys2 {0}
+        run: |
+          QT_QPA_PLATFORM=offscreen meson test -C build --print-errorlogs

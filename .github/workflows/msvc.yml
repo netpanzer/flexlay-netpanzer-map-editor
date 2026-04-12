@@ -1,0 +1,50 @@
+name: MSVC
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.sha }}
+  cancel-in-progress: true
+
+on:
+  push:
+    branches: [main, qt-port]
+    paths:
+      - '**'
+      - '!**.md'
+      - '**/msvc.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - '**'
+      - '!**.md'
+      - '**/msvc.yml'
+
+jobs:
+  build:
+    runs-on: windows-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Qt5
+        uses: jurplel/install-qt-action@v4
+        with:
+          version: '5.15.2'
+          arch: win64_msvc2019_64
+          cache: true
+
+      - name: Install Meson and Ninja
+        run: pip install meson ninja
+
+      - name: Set up MSVC environment
+        uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: x64
+
+      - name: Build
+        run: |
+          meson setup build --backend=ninja
+          ninja -C build
+
+      - name: Test
+        env:
+          QT_QPA_PLATFORM: offscreen
+        run: meson test -C build --print-errorlogs
