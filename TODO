@@ -1,9 +1,6 @@
 Known missing features
 ======================
 
-- Thumbnail regeneration when saving .npm (currently preserves original
-  thumbnail or writes zeros)
-
 - Tileset theme switching UI (Desert / IcyWinter / Martian / etc. variants
   alongside the default summer12mb)
 
