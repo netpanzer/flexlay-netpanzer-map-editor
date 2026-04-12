@@ -20,6 +20,7 @@
 #include <QDirIterator>
 #include <QActionGroup>
 #include <QKeySequence>
+#include <QCloseEvent>
 #include <cmath>
 
 // ---------------------------------------------------------------------------
@@ -288,6 +289,8 @@ void MainWindow::applyTileset()
 
 void MainWindow::onOpen()
 {
+    if (!maybeSave()) return;
+
     const QString fn = QFileDialog::getOpenFileName(
         this, "Open map", m_currentFile,
         "netPanzer maps (*.npm);;Text maps (*.txt);;All files (*)");
@@ -311,6 +314,10 @@ void MainWindow::onOpen()
         if (m_tileset.load(tsPath)) {
             applyTileset();
             statusBar()->showMessage("Tileset: " + QFileInfo(tsPath).fileName(), 4000);
+        } else {
+            QMessageBox::warning(this, "Tileset error",
+                                 "Found tileset but could not load it:\n" + tsPath +
+                                 "\n\nUse File → Load Tileset to locate it manually.");
         }
     } else if (!m.tileSetName.isEmpty()) {
         statusBar()->showMessage(
@@ -351,21 +358,25 @@ void MainWindow::onSave()
     const Map m = mapWithThumbnail(m_view->map(), m_view->tileset());
 
     if (m_currentFile.endsWith(".npm", Qt::CaseInsensitive)) {
-        const bool ok = MapLoader::saveNpmVerified(m_currentFile, m, false);
-        if (!ok) {
+        const QString newPath = m_currentFile + ".new";
+        if (!MapLoader::saveNpmVerified(m_currentFile, m, false)) {
             QMessageBox::warning(this, "Save failed",
-                                 "Failed to write verified .npm to:\n" + m_currentFile + ".new");
+                                 "Failed to write or verify:\n" + newPath);
             return;
         }
         const auto btn = QMessageBox::question(
             this, "Replace original?",
-            "Verified map written to:\n" + m_currentFile + ".new" +
+            "Verified map written to:\n" + newPath +
             "\n\nReplace original? (backup created as .bak)",
             QMessageBox::Yes | QMessageBox::No);
         if (btn == QMessageBox::Yes) {
-            if (!MapLoader::saveNpmVerified(m_currentFile, m, true))
+            const QString backup = m_currentFile + ".bak";
+            QFile::remove(backup);
+            const bool renamed = QFile::rename(m_currentFile, backup)
+                              && QFile::rename(newPath, m_currentFile);
+            if (!renamed)
                 QMessageBox::warning(this, "Replace failed",
-                                     "Could not replace original. See " + m_currentFile + ".new");
+                                     "Could not replace original.\nSaved copy is at:\n" + newPath);
             else { m_modified = false; updateTitle(); }
         }
     } else {
@@ -399,6 +410,8 @@ void MainWindow::onSaveAs()
 
 void MainWindow::onNewMap()
 {
+    if (!maybeSave()) return;
+
     QDialog dlg(this);
     dlg.setWindowTitle("New Map");
     auto* layout = new QFormLayout(&dlg);
@@ -448,6 +461,29 @@ void MainWindow::onLoadTileset()
     }
     applyTileset();
     statusBar()->showMessage("Tileset: " + QFileInfo(fn).fileName(), 4000);
+}
+
+// ---------------------------------------------------------------------------
+// Unsaved-changes guard
+
+bool MainWindow::maybeSave()
+{
+    if (!m_modified) return true;
+    const auto btn = QMessageBox::question(
+        this, "Unsaved Changes",
+        "The map has unsaved changes.\nDo you want to save before continuing?",
+        QMessageBox::Save | QMessageBox::Discard | QMessageBox::Cancel);
+    if (btn == QMessageBox::Cancel)  return false;
+    if (btn == QMessageBox::Save)    onSave();
+    return !m_modified; // false if the save itself was cancelled or failed
+}
+
+void MainWindow::closeEvent(QCloseEvent* e)
+{
+    if (maybeSave())
+        e->accept();
+    else
+        e->ignore();
 }
 
 // ---------------------------------------------------------------------------

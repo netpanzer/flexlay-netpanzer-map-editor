@@ -37,6 +37,9 @@ private slots:
     void onViewportChanged(const QRectF& tileRect);
     void onMinimapPan(QPointF tilePt);
 
+protected:
+    void closeEvent(QCloseEvent* e) override;
+
 private:
     void setupMenus();
     void setupToolbar();
@@ -45,6 +48,9 @@ private:
     void updateTitle();
     void applyTileset();
     QString findTileset(const QString& mapPath, const QString& tileSetName) const;
+    // Returns true if it is safe to discard the current map (no unsaved changes,
+    // or the user chose to save/discard). Returns false if the user cancelled.
+    bool maybeSave();
 
     MapView*      m_view      = nullptr;
     TilePanel*    m_tilePanel = nullptr;

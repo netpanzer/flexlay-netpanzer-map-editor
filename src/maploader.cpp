@@ -256,8 +256,7 @@ bool MapLoader::saveText(const QString& path, const Map& m)
     if (base.endsWith(".npm", Qt::CaseInsensitive) ||
         base.endsWith(".txt", Qt::CaseInsensitive))
         base = base.chopped(4);
-    writeOptSpn(base, m);
-    return true;
+    return writeOptSpn(base, m);
 }
 
 // ---------------------------------------------------------------------------
@@ -309,8 +308,7 @@ bool MapLoader::saveNpm(const QString& path, const Map& m)
         base = base.chopped(8);
     else if (base.endsWith(".npm", Qt::CaseInsensitive))
         base = base.chopped(4);
-    writeOptSpn(base, m);
-    return true;
+    return writeOptSpn(base, m);
 }
 
 // ---------------------------------------------------------------------------
