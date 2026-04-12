@@ -329,6 +329,7 @@ bool MapLoader::saveNpmVerified(const QString& destPath, const Map& m, bool repl
     QFile vf(newPath);
     if (!vf.open(QIODevice::ReadOnly)) return false;
     const Map reloaded = loadNpm(vf.readAll(), destPath); // use destPath as hint
+    vf.close(); // must close before rename on Windows
     if (!reloaded.isValid()) return false;
     if (reloaded.width != m.width || reloaded.height != m.height) return false;
     if (reloaded.tiles.size() != m.tiles.size()) return false;
