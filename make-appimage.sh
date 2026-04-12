@@ -46,19 +46,12 @@ sudo DEBIAN_FRONTEND=noninteractive sh -c "
   apt-get update && apt-get -y upgrade && \
   apt-get install -y \
     build-essential \
-    libboost-dev \
-    ruby-dev \
-    scons \
-    swig \
-    libx11-dev \
-    libxmu-dev \
-    libxi-dev \
-    libxxf86vm-dev \
-    libxrandr-dev \
-    libgl1-mesa-dev \
-    libglu1-mesa-dev \
-    libpng-dev \
-    libjpeg-dev \
+    meson \
+    ninja-build \
+    qtbase5-dev \
+    qtbase5-dev-tools \
+    libqt5gui5 \
+    pkg-config \
     patchelf \
 "
 
@@ -66,41 +59,16 @@ sudo DEBIAN_FRONTEND=noninteractive sh -c "
 # Build
 # ---------------------------------------------------------------------------
 
-cd "$WORKSPACE/external/clanlib"
-scons
-
 cd "$WORKSPACE"
-scons
+meson setup build --buildtype=release
+ninja -C build
 
 # ---------------------------------------------------------------------------
 # Populate AppDir
 # ---------------------------------------------------------------------------
 
-# Ruby interpreter — bundle so the AppImage is independent of host Ruby version.
-# The .so extension modules are ABI-tied to the Ruby version they were compiled
-# against; bundling that same Ruby avoids version mismatch errors on the host.
-RUBY_BIN=$(command -v ruby)
-RUBY_LIBDIR=$(ruby -r rbconfig -e 'puts RbConfig::CONFIG["rubylibdir"]')
-RUBY_ARCHDIR=$(ruby -r rbconfig -e 'puts RbConfig::CONFIG["archdir"]')
-
-install -Dm755 "$RUBY_BIN" "$APPDIR/usr/bin/ruby"
-
-mkdir -p "$APPDIR/usr/lib/ruby"
-cp -a "$RUBY_LIBDIR/." "$APPDIR/usr/lib/ruby/"
-cp -a "$RUBY_ARCHDIR/." "$APPDIR/usr/lib/ruby/"
-
-# Ruby extension modules — placed in usr/lib/ so LD_LIBRARY_PATH and RUBYLIB
-# both resolve them correctly from the AppRun environment.
-install -Dm755 "$WORKSPACE/ruby/flexlay_wrap.so"        "$APPDIR/usr/lib/flexlay_wrap.so"
-install -Dm755 "$WORKSPACE/netpanzer/netpanzer_wrap.so" "$APPDIR/usr/lib/netpanzer_wrap.so"
-
-# Ruby library scripts
-mkdir -p "$APPDIR/usr/share/netpanzer-editor"
-cp -a "$WORKSPACE/ruby"      "$APPDIR/usr/share/netpanzer-editor/ruby"
-cp -a "$WORKSPACE/netpanzer" "$APPDIR/usr/share/netpanzer-editor/netpanzer"
-
-# Flexlay data (icons, gui.xml, etc.) — referenced via FLEXLAY_DATADIR
-cp -a "$WORKSPACE/data" "$APPDIR/usr/share/netpanzer-editor/data"
+install -Dm755 "$WORKSPACE/build/netpanzer-editor" \
+  "$APPDIR/usr/bin/netpanzer-editor"
 
 # Desktop entry
 mkdir -p "$APPDIR/usr/share/applications"
@@ -114,43 +82,19 @@ Type=Application
 Categories=Game;
 DESKTOP
 
-# Icon — use the 64x64 brush image as a stand-in application icon
-install -Dm644 "$WORKSPACE/data/images/brush/brush.png" \
+# Icon — use a 24x24 stock icon as a stand-in application icon
+install -Dm644 "$WORKSPACE/data/images/icons24/stock_save.png" \
   "$APPDIR/usr/share/pixmaps/netpanzer-editor.png"
 
 DOCDIR="$APPDIR/usr/share/doc/netpanzer-editor"
 mkdir -p "$DOCDIR"
 
 # Project license (GPL v3)
-install -Dm644 "$WORKSPACE/COPYING"  "$DOCDIR/LICENSE"
-install -Dm644 "$WORKSPACE/README"   "$DOCDIR/README"
-
-# Ruby license — BSD 2-clause requires preserving the copyright notice in
-# binary distributions. Ruby is dual-licensed; the BSD 2-clause text is
-# shipped in the distro package's copyright file.
-RUBY_COPYRIGHT=$(ls /usr/share/doc/ruby*/copyright 2>/dev/null | head -1)
-if [ -z "$RUBY_COPYRIGHT" ]; then
-  echo "ERROR: cannot find Ruby copyright file in /usr/share/doc/ruby*/" >&2
-  exit 1
-fi
-install -Dm644 "$RUBY_COPYRIGHT" "$DOCDIR/LICENSE.Ruby"
-
-# ClanLib license — zlib license requires the notice be preserved in
-# distributions. Clause 2 also requires modified versions be plainly marked;
-# the notice below satisfies both for binary distributions.
-install -Dm644 "$WORKSPACE/external/clanlib/doc/COPYING" \
-  "$DOCDIR/LICENSE.ClanLib"
-cat >> "$DOCDIR/LICENSE.ClanLib" <<'NOTE'
-
----
-NOTE: This copy of ClanLib has been modified from the original source.
-Modifications are available at https://github.com/netpanzer/flexlay-netpanzer-map-editor
-under external/clanlib/.
-NOTE
-
+install -Dm644 "$WORKSPACE/COPYING" "$DOCDIR/LICENSE"
+install -Dm644 "$WORKSPACE/README"  "$DOCDIR/README"
 
 # ---------------------------------------------------------------------------
-# linuxdeploy — bundle shared library dependencies
+# linuxdeploy — bundle shared library dependencies (Qt5 + system libs)
 # ---------------------------------------------------------------------------
 
 cd "$WORKSPACE"
@@ -163,9 +107,7 @@ export LINUXDEPLOY_OUTPUT_VERSION="$VERSION"
 
 linuxdeploy \
   --appdir "$APPDIR" \
-  --executable "$APPDIR/usr/bin/ruby" \
-  --library "$APPDIR/usr/lib/flexlay_wrap.so" \
-  --library "$APPDIR/usr/lib/netpanzer_wrap.so" \
+  --executable "$APPDIR/usr/bin/netpanzer-editor" \
   --desktop-file "$APPDIR/usr/share/applications/netpanzer-editor.desktop" \
   --icon-file "$APPDIR/usr/share/pixmaps/netpanzer-editor.png" \
   --icon-filename netpanzer-editor \
