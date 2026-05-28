@@ -4,7 +4,6 @@
 #include "stamppanel.h"
 #include "minimap.h"
 #include "maploader.h"
-#include "autotileset.h"
 #include <QMenuBar>
 #include <QToolBar>
 #include <QStatusBar>
@@ -225,13 +224,6 @@ void MainWindow::setupMenus()
     }
     m_toolGroup->actions().first()->setChecked(true);
 
-    tools->addSeparator();
-    m_autotileAct = tools->addAction("&Autotile");
-    m_autotileAct->setCheckable(true);
-    m_autotileAct->setEnabled(false);
-    connect(m_autotileAct, &QAction::toggled, this,
-            [this](bool on) { m_view->setAutotileEnabled(on); });
-
     // View
     QMenu* view = menuBar()->addMenu("&View");
 
@@ -309,8 +301,6 @@ void MainWindow::setupToolbar()
     // checked state and the exclusive group handles mutual exclusivity.
     for (QAction* a : m_toolGroup->actions())
         tb->addAction(a);
-    tb->addSeparator();
-    tb->addAction(m_autotileAct);
 }
 
 // ---------------------------------------------------------------------------
@@ -448,7 +438,6 @@ void MainWindow::openFile(const QString& fn)
     if (!tsPath.isEmpty()) {
         if (m_tileset.load(tsPath)) {
             applyTileset();
-            loadAutotileData(tsPath);
             statusBar()->showMessage("Tileset: " + QFileInfo(tsPath).fileName(), 4000);
         } else {
             QMessageBox::warning(this, "Tileset error",
@@ -649,38 +638,7 @@ void MainWindow::onNewMap()
             m.tileSetName);
     if (!tsFullPath.isEmpty() && m_tileset.load(tsFullPath)) {
         applyTileset();
-        loadAutotileData(tsFullPath);
     }
-}
-
-void MainWindow::loadAutotileData(const QString& tlsPath)
-{
-    const QFileInfo fi(tlsPath);
-    const QString stem = fi.completeBaseName();
-    const QString sidecar = stem + ".autotile.json";
-
-    QStringList candidates = {
-        fi.dir().filePath(sidecar),
-        QCoreApplication::applicationDirPath() + "/../share/netpanzer-editor/autotile/" + sidecar,
-        QCoreApplication::applicationDirPath() + "/data/autotile/" + sidecar,
-        QCoreApplication::applicationDirPath() + "/../data/autotile/" + sidecar,
-    };
-
-    for (const QString& path : candidates) {
-        AutotileSet ats;
-        if (ats.load(path)) {
-            m_view->setAutotileSet(std::move(ats));
-            m_autotileAct->setEnabled(true);
-            m_autotileAct->setChecked(true);
-            return;
-        }
-    }
-
-    // No sidecar found — disable autotile
-    m_view->setAutotileSet(AutotileSet{});
-    m_view->setAutotileEnabled(false);
-    m_autotileAct->setChecked(false);
-    m_autotileAct->setEnabled(false);
 }
 
 void MainWindow::onLoadTileset()
@@ -696,7 +654,6 @@ void MainWindow::onLoadTileset()
     }
     m_view->map().tileSetName = QFileInfo(fn).fileName();
     applyTileset();
-    loadAutotileData(fn);
     statusBar()->showMessage("Tileset: " + QFileInfo(fn).fileName(), 4000);
 }
 
