@@ -19,7 +19,7 @@ on:
       - '!**.md'
       - '!**.yml'
       - '**/appimage.yml'
-      - 'make-appimage.sh'
+      - 'appimage/**'
       - 'AppRun'
   pull_request:
     branches: [main]
@@ -28,7 +28,7 @@ on:
       - '!**.md'
       - '!**.yml'
       - '**/appimage.yml'
-      - 'make-appimage.sh'
+      - 'appimage/**'
       - 'AppRun'
 
 jobs:
@@ -55,8 +55,7 @@ jobs:
 
       - name: Build AppImage
         run: |
-          export HOSTUID=$(id -u) HOSTGID=$(id -g)
-          VERSION="${VERSION}" docker compose run --rm build
+          VERSION="${VERSION}" docker compose -f appimage/docker-compose.yml run --rm build
 
       - name: Checksum
         run: |

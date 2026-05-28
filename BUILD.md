@@ -80,43 +80,46 @@ To run the editor with suppression active:
 LSAN_OPTIONS=suppressions=$(pwd)/lsan.supp ./build/netpanzer-editor
 ```
 
-## AppImage via Docker
+## AppImage via container
 
 The easiest way to produce a self-contained AppImage is via the
 `andy5995/linuxdeploy:v3-jammy` container (available on Docker Hub),
 which has all build tools and linuxdeploy pre-installed.
 
+All container assets live under `appimage/`.
+
 ### Setup
 
-Copy `.env.example` to `.env` and set `HOSTUID`/`HOSTGID` to your own
-user so the container's entrypoint runs the build as that user and output
-files are not owned by root:
+`VERSION` controls the AppImage filename (e.g.
+`netpanzer-editor-0.1-x86_64.AppImage`) and must be set. Copy
+`appimage/.env.example` to `appimage/.env` and edit, or just export
+`VERSION` in your shell before running compose.
 
-```sh
-cp .env.example .env
-# Edit .env and set HOSTUID and HOSTGID, e.g.:
-#   HOSTUID=$(id -u)
-#   HOSTGID=$(id -g)
-```
-
-Also set `VERSION` in `.env` to the desired AppImage version string.
+The container auto-detects host UID/GID from the bind-mounted
+workspace; `HOSTUID`/`HOSTGID` are exposed in the compose file as
+opt-in overrides (uncomment in `.env` if you need to override).
 
 ### Building
 
+Run from the repo root:
+
 ```sh
-docker compose run --rm build
+docker compose -f appimage/docker-compose.yml run --rm build
 ```
 
 The resulting AppImage is written to `out/`.
 
 Launch the AppImage and use **File → Open** to open a `.npm` map file.
 
-### Testing changes to `make-appimage.sh`
+### Interactive shell in the container
 
-Use `docker-compose.dev.yml` to get an interactive shell inside the container:
+For poking around the container or stepping through `make-appimage.sh`
+manually:
 
 ```sh
-docker compose -f docker-compose.dev.yml run --rm build
+docker compose -f appimage/docker-compose.yml run --rm --entrypoint bash build -i
 ```
 
-From there you can run `./make-appimage.sh` directly or step through it manually.
+The trailing `-i` overrides the compose command so `bash` starts an
+interactive shell instead of running the build script. From there you
+can run `./appimage/make-appimage.sh` directly.

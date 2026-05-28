@@ -33,8 +33,8 @@ export -p
 
 cd "$WORKSPACE"
 
-if [ ! -e "AppRun" ]; then
-  echo "You must be in the same directory where the AppRun file resides"
+if [ ! -e "appimage/AppRun" ]; then
+  echo "AppRun not found at appimage/AppRun (cwd: $PWD)"
   exit 1
 fi
 
@@ -88,7 +88,7 @@ linuxdeploy \
   --desktop-file "$APPDIR/usr/share/applications/netpanzer-editor.desktop" \
   --icon-file "$APPDIR/usr/share/pixmaps/netpanzer-editor.png" \
   --icon-filename netpanzer-editor \
-  --custom-apprun "$WORKSPACE/AppRun" \
+  --custom-apprun "$WORKSPACE/appimage/AppRun" \
   --plugin qt
 
 # ---------------------------------------------------------------------------

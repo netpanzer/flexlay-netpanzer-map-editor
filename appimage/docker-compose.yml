@@ -1,0 +1,15 @@
+services:
+  build:
+    environment:
+      # HOSTUID/HOSTGID are auto-detected from the workspace owner;
+      # export them only to override (see the helper container's README).
+      HOSTUID: ${HOSTUID}
+      HOSTGID: ${HOSTGID}
+      VERSION: ${VERSION}
+      WORKSPACE: /workspace
+      DOCKER_BUILD: 1
+    image: andy5995/linuxdeploy:v3-jammy
+    volumes:
+      - ../:/workspace
+    working_dir: /workspace
+    command: "${SCRIPT:-./appimage/make-appimage.sh}"
