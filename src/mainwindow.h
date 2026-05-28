@@ -50,7 +50,6 @@ private:
     void setCurrentFile(const QString& path);
     void updateTitle();
     void applyTileset();
-    void loadAutotileData(const QString& tlsPath);
     void openFile(const QString& path);
     void addToRecentFiles(const QString& path);
     QString findTileset(const QString& mapPath, const QString& tileSetName) const;
@@ -69,7 +68,6 @@ private:
     QAction*      m_undoAct     = nullptr;
     QAction*      m_redoAct     = nullptr;
     QAction*      m_saveAct     = nullptr;
-    QAction*      m_autotileAct = nullptr;
     QActionGroup* m_toolGroup   = nullptr;
     QMenu*        m_recentMenu  = nullptr;
 

@@ -23,11 +23,6 @@ and structures with the tools below, and save it under a new name.
   structures) imported from the original Flexlay editor via
   `tools/import_flexlay_brushes.py`
 - Tile pick tool — click any map tile to select it for painting
-- Autotile — automatic transition-tile selection based on 8-neighbour bitmask;
-  enabled when a `.autotile.json` sidecar is found for the loaded tileset
-  (see [docs/autotile-format.md](docs/autotile-format.md))
-- summer12mb autotile support — bitmask mappings derived from tile imagery via
-  `tools/derive_autotile_bitmasks.py`; mountain/water/wall/road/grass/river covered
 - Tileset auto-detected when opening a map or creating a new one
 - Tile browser with jump-to-ID search
 - Place and move outpost and spawn-point objects

@@ -27,7 +27,6 @@ rcc_files = qt5.preprocess(qresources : ['src/resources.qrc'])
 
 editor_sources = [
   'src/main.cpp',
-  'src/autotileset.cpp',
   'src/maploader.cpp',
   'src/mapview.cpp',
   'src/tlsloader.cpp',
@@ -47,10 +46,6 @@ executable('netpanzer-editor',
 
 # ---------------------------------------------------------------------------
 # Install
-
-install_data(
-  'data/autotile/summer12mb.autotile.json',
-  install_dir : get_option('datadir') / 'netpanzer-editor' / 'autotile')
 
 install_subdir('data/stamps',
   install_dir : get_option('datadir') / 'netpanzer-editor')

@@ -12,7 +12,6 @@
 #include "tlsloader.h"
 #include "commands.h"
 #include "stamp.h"
-#include "autotileset.h"
 
 enum class Tool {
     TilePaint,       // left-drag paints selected tile
@@ -53,11 +52,6 @@ public:
     // Tile painting
     void setSelectedTile(int id) { m_selectedTile = id; }
     int  selectedTile()   const  { return m_selectedTile; }
-
-    // Autotiling
-    void setAutotileSet(AutotileSet ats) { m_autotileSet = std::move(ats); }
-    void setAutotileEnabled(bool en)     { m_autotileEnabled = en; }
-    bool autotileEnabled() const         { return m_autotileEnabled; }
 
     // Rect selection
     QRect selection() const { return m_selection; }
@@ -123,12 +117,6 @@ private:
     void startStroke();
     void addToStroke(int tx, int ty);
     void commitStroke();
-    void updateAutotileNeighbors(int tx, int ty, const AutotileGroup& grp);
-
-    // 4dir piece helpers
-    void addPieceToStroke(int px, int py, const AutotileGroup& grp);
-    void updatePieceNeighbors(int px, int py, const AutotileGroup& grp);
-    void applyPieceTiles(int px, int py, const AutotileGroup::Piece& piece);
 
     // Command stack (unified for tiles and objects)
     // pushCommand: command already applied to m_map (tile batches)
@@ -150,10 +138,6 @@ private:
     Tool m_tool        = Tool::TilePaint;
     int  m_selectedTile = 0;
     int  m_selectedObj  = -1;
-
-    // Autotile state
-    AutotileSet m_autotileSet;
-    bool        m_autotileEnabled = false;
 
     // Rect selection state
     QRect  m_selection;          // in tile coords, null if none
