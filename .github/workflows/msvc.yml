@@ -27,7 +27,7 @@ jobs:
       QT_DIR: ${{ github.workspace }}\Qt
 
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
 
       - name: Cache Qt
         id: cache-qt
