@@ -7,13 +7,14 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ```sh
 meson setup build
 ninja -C build
-meson test -C build --print-errorlogs   # runs both test_maploader and test_tlsloader
+meson test -C build --print-errorlogs   # test_document, test_maploader, test_tlsloader
 ./build/netpanzer-editor
 ```
 
 Run a single test executable directly (Qt Test supports filtering):
 
 ```sh
+./build/test_document                        # edit rules; needs no QPA at all
 ./build/test_maploader                       # all 13 cases
 ./build/test_maploader testSaveNpm_roundTrip # one slot
 ./build/test_tlsloader -platform offscreen   # tlsloader needs an offscreen QPA
@@ -44,7 +45,9 @@ A netPanzer map is up to three sibling files sharing a base name: binary `.npm` 
 
 ### Tool / command model
 
-`MapView` (`src/mapview.{h,cpp}`) owns a `Tool` enum (TilePaint, EllipsePaint, RectOutline, TilePick, RectSelect, RectFill, StampPaint, PlaceOutpost, PlaceSpawnpoint, SelectObject). Edits go through polymorphic `Command` subclasses in `src/commands.h` (TileBatch, AddObject, RemoveObject, MoveObject, RenameObject) pushed onto an undo stack — drag-paint strokes batch into a single TileBatch so undo restores the whole stroke.
+`Document` (`src/document.{h,cpp}`) owns the map and the undo/redo stacks, plus the edit rules that operate on them — stroke batching and stamp application. It contains no widget code on purpose, so those rules are tested directly by `tests/test_document.cpp` (`QTEST_APPLESS_MAIN` — no QApplication, no QPA). `MapView` holds a `Document` and is responsible for repainting and emitting `mapModified()` after each mutation; its public map/undo API just forwards, so `MainWindow` is unaware of the split.
+
+`MapView` (`src/mapview.{h,cpp}`) owns a `Tool` enum (TilePaint, EllipsePaint, RectOutline, TilePick, RectSelect, RectFill, StampPaint, PlaceOutpost, PlaceSpawnpoint, SelectObject). Edits go through polymorphic `Command` subclasses in `src/commands.h` (TileBatch, AddObject, RemoveObject, MoveObject, RenameObject) recorded on the Document's undo stack — drag-paint strokes batch into a single TileBatch so undo restores the whole stroke.
 
 ### Qt build wiring
 
