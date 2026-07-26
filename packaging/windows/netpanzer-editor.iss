@@ -12,8 +12,15 @@
 #endif
 
 [Setup]
+; Fixed identity for upgrades — must not change even if AppName does.
+AppId={{8F3C1A64-7D2E-4B59-9E30-5A1C6B84D7F2}
 AppName={#AppName}
 AppVersion={#VERSION}
+; Without this Setup runs in 32-bit mode and {autopf} would resolve to
+; the x86 Program Files for what is an x86_64 build. "x64" rather than
+; "x64compatible" because the latter needs Inno Setup 6.3+.
+ArchitecturesInstallIn64BitMode=x64
+ArchitecturesAllowed=x64
 AppPublisher={#Publisher}
 AppPublisherURL={#AppURL}
 AppSupportURL={#IssuesURL}
