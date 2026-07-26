@@ -339,15 +339,18 @@ std::vector<QPoint> MapView::computeEllipseTiles(QPoint a, QPoint b, int mapW, i
     const double peri = M_PI * (rx + ry) * (1 + 3*h / (10 + std::sqrt(4 - 3*h)));
     const int steps   = std::max(8, int(std::ceil(peri * 2)));
 
-    std::vector<bool>   visited(size_t(mapW * mapH), false);
+    // Dedupe against the tiles emitted so far, not a whole-map bitmap: this runs
+    // on every repaint during a drag, and an outline touches O(perimeter) tiles
+    // while a map may be 4096x4096.
+    QSet<int>           visited;
     std::vector<QPoint> result;
     for (int i = 0; i < steps; ++i) {
         const double angle = 2.0 * M_PI * i / steps;
         const int tx = std::clamp(int(std::round(cx + rx * std::cos(angle))), 0, mapW - 1);
         const int ty = std::clamp(int(std::round(cy + ry * std::sin(angle))), 0, mapH - 1);
-        const size_t idx = size_t(ty * mapW + tx);
-        if (!visited[idx]) {
-            visited[idx] = true;
+        const int idx = ty * mapW + tx;
+        if (!visited.contains(idx)) {
+            visited.insert(idx);
             result.push_back(QPoint(tx, ty));
         }
     }
@@ -362,11 +365,11 @@ std::vector<QPoint> MapView::computeRectOutlineTiles(QPoint a, QPoint b, int map
     const int x1 = std::clamp(std::max(a.x(), b.x()), 0, mapW - 1);
     const int y1 = std::clamp(std::max(a.y(), b.y()), 0, mapH - 1);
 
-    std::vector<bool>   visited(size_t(mapW * mapH), false);
+    QSet<int>           visited;
     std::vector<QPoint> result;
     auto add = [&](int x, int y) {
-        const size_t idx = size_t(y * mapW + x);
-        if (!visited[idx]) { visited[idx] = true; result.push_back(QPoint(x, y)); }
+        const int idx = y * mapW + x;
+        if (!visited.contains(idx)) { visited.insert(idx); result.push_back(QPoint(x, y)); }
     };
     for (int x = x0; x <= x1; ++x) { add(x, y0); add(x, y1); }
     for (int y = y0 + 1; y < y1;  ++y) { add(x0, y); add(x1, y); }
