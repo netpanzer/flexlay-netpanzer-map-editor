@@ -59,10 +59,14 @@ jobs:
       - name: Stage installer files
         shell: msys2 {0}
         run: |
-          mkdir -p _staging/platforms
+          mkdir -p _staging/platforms _staging/styles _staging/data/stamps
           cp build/netpanzer-editor.exe _staging/
           bash packaging/windows/collect-dlls.sh _staging/netpanzer-editor.exe _staging/
           cp "$MINGW_PREFIX/share/qt5/plugins/platforms/qwindows.dll" _staging/platforms/
+          # Native theming; without it Qt falls back to a plain style
+          cp "$MINGW_PREFIX/share/qt5/plugins/styles/qwindowsvistastyle.dll" _staging/styles/
+          # MainWindow looks for stamps in <exe dir>/data/stamps
+          cp data/stamps/*.stamp.json _staging/data/stamps/
 
       - name: Set version
         shell: bash

@@ -37,6 +37,10 @@ Source: "..\..\_staging\{#AppExe}"; DestDir: "{app}"; Flags: ignoreversion
 Source: "..\..\_staging\*.dll";     DestDir: "{app}"; Flags: ignoreversion
 ; Qt5 platform plugin — required for any Qt5 GUI app on Windows
 Source: "..\..\_staging\platforms\*"; DestDir: "{app}\platforms"; Flags: ignoreversion
+; Qt5 style plugin — native Windows theming
+Source: "..\..\_staging\styles\*";    DestDir: "{app}\styles";    Flags: ignoreversion
+; Bundled stamps — MainWindow searches <exe dir>\data\stamps
+Source: "..\..\_staging\data\stamps\*"; DestDir: "{app}\data\stamps"; Flags: ignoreversion
 
 [Icons]
 Name: "{group}\{#AppName}";           Filename: "{app}\{#AppExe}"
