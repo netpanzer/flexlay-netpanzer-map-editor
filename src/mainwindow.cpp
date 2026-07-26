@@ -811,19 +811,5 @@ void MainWindow::onViewportChanged(const QRectF& tileRect)
 
 void MainWindow::onMinimapPan(QPointF tilePt)
 {
-    // Pan MapView so `tilePt` is centred in the viewport
-    const double px = tilePt.x() * MapView::TILE_SIZE;
-    const double py = tilePt.y() * MapView::TILE_SIZE;
-    const int newPanX = int(m_view->width()  / 2.0 - px * m_view->zoom());
-    const int newPanY = int(m_view->height() / 2.0 - py * m_view->zoom());
-    // Trick: temporarily adjust the internal pan via a zero-distance zoom call
-    // (MapView doesn't expose setPan, so we use fitToWindow math inline here)
-    // Instead, expose a simple slot:
-    // Actually just call setZoom which doesn't pan—use a workaround via
-    // re-implementing pan. We'll add a panToTile helper to MapView.
-    // For now use the public API: fit, then zoom back.
-    // A cleaner approach: just add setPan to MapView.
-    Q_UNUSED(newPanX); Q_UNUSED(newPanY);
-    // We need MapView::setPan — add it.
     m_view->panToTile(tilePt);
 }
