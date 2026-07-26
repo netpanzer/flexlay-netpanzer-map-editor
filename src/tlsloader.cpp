@@ -94,21 +94,26 @@ bool Tileset::load(const QString& path)
     return true;
 }
 
+void Tileset::blitTile(QImage& dst, int index, int dx, int dy) const
+{
+    const unsigned char* src =
+        reinterpret_cast<const unsigned char*>(m_rawPixels.constData())
+        + index * m_tileW * m_tileH;
+
+    for (int y = 0; y < m_tileH; ++y) {
+        QRgb* line = reinterpret_cast<QRgb*>(dst.scanLine(dy + y)) + dx;
+        for (int x = 0; x < m_tileW; ++x)
+            line[x] = m_palette[src[y * m_tileW + x]];
+    }
+}
+
 QImage Tileset::tileImage(int i) const
 {
     if (i < 0 || i >= m_tileCount)
         return QImage();
 
     QImage img(m_tileW, m_tileH, QImage::Format_RGB32);
-    const int stride = m_tileW * m_tileH;
-    const unsigned char* src =
-        reinterpret_cast<const unsigned char*>(m_rawPixels.constData()) + i * stride;
-
-    for (int y = 0; y < m_tileH; ++y) {
-        QRgb* line = reinterpret_cast<QRgb*>(img.scanLine(y));
-        for (int x = 0; x < m_tileW; ++x)
-            line[x] = m_palette[src[y * m_tileW + x]];
-    }
+    blitTile(img, i, 0, 0);
     return img;
 }
 
@@ -121,23 +126,8 @@ const QImage& Tileset::atlas(int cols) const
     QImage img(cols * m_tileW, rows * m_tileH, QImage::Format_RGB32);
     img.fill(Qt::black);
 
-    const int stride = m_tileW * m_tileH;
-    const unsigned char* rawSrc =
-        reinterpret_cast<const unsigned char*>(m_rawPixels.constData());
-
-    for (int i = 0; i < m_tileCount; ++i) {
-        const int col = i % cols;
-        const int row = i / cols;
-        const int dx = col * m_tileW;
-        const int dy = row * m_tileH;
-        const unsigned char* src = rawSrc + i * stride;
-
-        for (int y = 0; y < m_tileH; ++y) {
-            QRgb* line = reinterpret_cast<QRgb*>(img.scanLine(dy + y)) + dx;
-            for (int x = 0; x < m_tileW; ++x)
-                line[x] = m_palette[src[y * m_tileW + x]];
-        }
-    }
+    for (int i = 0; i < m_tileCount; ++i)
+        blitTile(img, i, (i % cols) * m_tileW, (i / cols) * m_tileH);
 
     m_atlas     = std::move(img);
     m_atlasCols = cols;

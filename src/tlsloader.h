@@ -38,6 +38,9 @@ public:
     QImage tileImage(int i) const;
 
 private:
+    // Expand one tile's palette indices into 32-bit pixels at (dx, dy) in dst.
+    void blitTile(QImage& dst, int index, int dx, int dy) const;
+
     int m_tileCount = 0;
     int m_tileW = 32;
     int m_tileH = 32;

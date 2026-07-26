@@ -1,4 +1,5 @@
 #include "stamppanel.h"
+#include "scrollkeys.h"
 #include <QPainter>
 #include <QPaintEvent>
 #include <QMouseEvent>
@@ -205,17 +206,7 @@ void StampWidget::keyPressEvent(QKeyEvent* ev)
         emit stampSelected(nullptr);
         return;
     }
-    // Forward navigation keys to the parent scroll area
-    if (auto* sa = qobject_cast<QScrollArea*>(parentWidget() ? parentWidget()->parentWidget() : nullptr)) {
-        QScrollBar* sb = sa->verticalScrollBar();
-        switch (ev->key()) {
-        case Qt::Key_Home:   sb->setValue(sb->minimum()); return;
-        case Qt::Key_End:    sb->setValue(sb->maximum()); return;
-        case Qt::Key_PageUp:   sb->setValue(sb->value() - sb->pageStep()); return;
-        case Qt::Key_PageDown: sb->setValue(sb->value() + sb->pageStep()); return;
-        default: break;
-        }
-    }
+    if (forwardScrollKeys(ev, this)) return;
     QWidget::keyPressEvent(ev);
 }
 
