@@ -16,7 +16,6 @@ qt5_test_dep = dependency('qt5', modules : ['Core', 'Test'])
 # Sources that need MOC processing (contain Q_OBJECT)
 moc_headers = [
   'src/mapview.h',
-  'src/tilepanel.h',
   'src/tilebrowser.h',
   'src/stamppanel.h',
   'src/mainwindow.h',
@@ -30,7 +29,6 @@ editor_sources = [
   'src/maploader.cpp',
   'src/mapview.cpp',
   'src/tlsloader.cpp',
-  'src/tilepanel.cpp',
   'src/tilebrowser.cpp',
   'src/stamppanel.cpp',
   'src/mainwindow.cpp',
