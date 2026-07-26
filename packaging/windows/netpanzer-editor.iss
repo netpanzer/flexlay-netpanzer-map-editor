@@ -33,6 +33,9 @@ OutputBaseFilename=netpanzer-editor-{#VERSION}-windows-{#ARCH}-setup
 Compression=lzma
 SolidCompression=yes
 WizardStyle=modern
+; Icon for setup.exe itself; the uninstall entry reuses the app's embedded one.
+SetupIconFile=netpanzer-editor.ico
+UninstallDisplayIcon={app}\{#AppExe}
 
 [Languages]
 Name: "english"; MessagesFile: "compiler:Default.isl"

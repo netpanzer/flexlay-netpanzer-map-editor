@@ -35,8 +35,18 @@ editor_sources = [
   'src/minimap.cpp',
 ]
 
+# Windows resource: embeds the .ico so Explorer and the taskbar show it.
+win_resources = []
+if host_machine.system() == 'windows'
+  win_resources = import('windows').compile_resources(
+    'packaging/windows/netpanzer-editor.rc',
+    include_directories : include_directories('packaging/windows'),
+    depend_files        : files('packaging/windows/netpanzer-editor.ico'),
+  )
+endif
+
 executable('netpanzer-editor',
-  sources             : editor_sources + moc_files + rcc_files,
+  sources             : editor_sources + moc_files + rcc_files + win_resources,
   dependencies        : qt5_dep,
   include_directories : [include_directories('src'), build_inc],
   install             : true,
