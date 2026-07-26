@@ -8,6 +8,7 @@
 #include <QSet>
 #include <vector>
 #include <memory>
+#include <optional>
 #include "objects.h"
 #include "tlsloader.h"
 #include "commands.h"
@@ -106,8 +107,19 @@ protected:
     void resizeEvent(QResizeEvent*)       override;
 
 private:
-    // Coordinate mapping
-    bool widgetToTile(QPoint widgetPos, int& tx, int& ty) const;
+    // A rubber-band drag in tile coordinates. The shape tools differ only in
+    // which tiles they derive from the two endpoints, so they share this.
+    struct Drag {
+        QPoint start;
+        QPoint end;
+        bool   active = false;
+
+        void begin(QPoint tile) { start = end = tile; active = true; }
+    };
+
+    // Coordinate mapping. Returns nullopt when the position is outside the map,
+    // which is the only failure the callers care about.
+    std::optional<QPoint> tileAt(QPoint widgetPos) const;
     QPointF widgetToMapPx(QPoint widgetPos) const;
 
     // Object hit test (returns index or -1)
@@ -117,6 +129,9 @@ private:
     void startStroke();
     void addToStroke(int tx, int ty);
     void commitStroke();
+
+    // Paint a whole tile set as one undoable stroke (used by the shape tools).
+    void strokeTiles(const std::vector<QPoint>& tiles);
 
     // Command stack (unified for tiles and objects)
     // pushCommand: command already applied to m_map (tile batches)
@@ -157,18 +172,15 @@ private:
     // Outpost placement hover (tile coords, (-1,-1) = none)
     QPoint m_outpostHoverTile = QPoint(-1, -1);
 
-    // Ellipse paint state
-    QPoint m_ellipseStart;
-    QPoint m_ellipseEnd;
-    bool   m_ellipseActive = false;
-
-    // Rect outline paint state
-    QPoint m_rectOutlineStart;
-    QPoint m_rectOutlineEnd;
-    bool   m_rectOutlineActive = false;
+    // Shape paint state
+    Drag m_ellipse;
+    Drag m_rectOutline;
 
     static std::vector<QPoint> computeEllipseTiles(QPoint a, QPoint b, int mapW, int mapH);
     static std::vector<QPoint> computeRectOutlineTiles(QPoint a, QPoint b, int mapW, int mapH);
+
+    // Tiles the active shape tool would paint, or empty when none is dragging.
+    std::vector<QPoint> activeShapeTiles() const;
 
     // Pan state (middle button)
     bool   m_panning   = false;

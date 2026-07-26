@@ -83,8 +83,8 @@ void MapView::setTool(Tool t)
     m_stampPainting   = false;
     m_stampHoverTile  = QPoint(-1, -1);
     m_outpostHoverTile  = QPoint(-1, -1);
-    m_ellipseActive     = false;
-    m_rectOutlineActive = false;
+    m_ellipse.active     = false;
+    m_rectOutline.active = false;
     emit objectSelectionChanged(-1);
     update();
 
@@ -110,15 +110,17 @@ QPointF MapView::widgetToMapPx(QPoint wpos) const
     return (QPointF(wpos) - QPointF(m_pan)) / m_zoom;
 }
 
-bool MapView::widgetToTile(QPoint wpos, int& tx, int& ty) const
+std::optional<QPoint> MapView::tileAt(QPoint wpos) const
 {
-    if (!m_map.isValid()) return false;
+    if (!m_map.isValid()) return std::nullopt;
     const QPointF mp = widgetToMapPx(wpos);
-    tx = int(mp.x()) / TILE_SIZE;
-    ty = int(mp.y()) / TILE_SIZE;
+    int tx = int(mp.x()) / TILE_SIZE;
+    int ty = int(mp.y()) / TILE_SIZE;
     if (mp.x() < 0) tx--;   // correct negative floor
     if (mp.y() < 0) ty--;
-    return tx >= 0 && ty >= 0 && tx < m_map.width && ty < m_map.height;
+    if (tx < 0 || ty < 0 || tx >= m_map.width || ty >= m_map.height)
+        return std::nullopt;
+    return QPoint(tx, ty);
 }
 
 int MapView::objectAt(QPoint wpos) const
@@ -287,6 +289,26 @@ void MapView::commitStroke()
     }
     m_currentStroke.reset();
     m_strokeTiles.clear();
+}
+
+void MapView::strokeTiles(const std::vector<QPoint>& tiles)
+{
+    startStroke();
+    for (const QPoint& pt : tiles)
+        addToStroke(pt.x(), pt.y());
+    commitStroke();
+    update();
+}
+
+std::vector<QPoint> MapView::activeShapeTiles() const
+{
+    if (m_tool == Tool::EllipsePaint && m_ellipse.active)
+        return computeEllipseTiles(m_ellipse.start, m_ellipse.end,
+                                   m_map.width, m_map.height);
+    if (m_tool == Tool::RectOutline && m_rectOutline.active)
+        return computeRectOutlineTiles(m_rectOutline.start, m_rectOutline.end,
+                                       m_map.width, m_map.height);
+    return {};
 }
 
 // ---------------------------------------------------------------------------
@@ -495,26 +517,11 @@ void MapView::paintEvent(QPaintEvent*)
         }
     }
 
-    // Ellipse paint preview
-    if (m_tool == Tool::EllipsePaint && m_ellipseActive) {
-        const auto tiles = computeEllipseTiles(m_ellipseStart, m_ellipseEnd,
-                                               m_map.width, m_map.height);
+    // Shape paint preview (ellipse / rect outline share this)
+    if (const auto shape = activeShapeTiles(); !shape.empty()) {
         p.setOpacity(0.55);
         p.setPen(Qt::NoPen);
-        p.setBrush(QColor(255, 220, 0));
-        for (const QPoint& pt : tiles)
-            p.fillRect(QRectF(pt.x() * TILE_SIZE, pt.y() * TILE_SIZE,
-                              TILE_SIZE, TILE_SIZE), QColor(255, 220, 0, 180));
-        p.setOpacity(1.0);
-    }
-
-    // Rect outline paint preview
-    if (m_tool == Tool::RectOutline && m_rectOutlineActive) {
-        const auto tiles = computeRectOutlineTiles(m_rectOutlineStart, m_rectOutlineEnd,
-                                                   m_map.width, m_map.height);
-        p.setOpacity(0.55);
-        p.setPen(Qt::NoPen);
-        for (const QPoint& pt : tiles)
+        for (const QPoint& pt : shape)
             p.fillRect(QRectF(pt.x() * TILE_SIZE, pt.y() * TILE_SIZE,
                               TILE_SIZE, TILE_SIZE), QColor(255, 220, 0, 180));
         p.setOpacity(1.0);
@@ -603,31 +610,20 @@ void MapView::mousePressEvent(QMouseEvent* ev)
 
     if (ev->button() != Qt::LeftButton) return;
 
+    const std::optional<QPoint> tile = tileAt(ev->pos());
+
     switch (m_tool) {
     case Tool::EllipsePaint: {
-        int tx, ty;
-        if (widgetToTile(ev->pos(), tx, ty)) {
-            m_ellipseStart  = QPoint(tx, ty);
-            m_ellipseEnd    = QPoint(tx, ty);
-            m_ellipseActive = true;
-            update();
-        }
+        if (tile) { m_ellipse.begin(*tile); update(); }
         break;
     }
     case Tool::RectOutline: {
-        int tx, ty;
-        if (widgetToTile(ev->pos(), tx, ty)) {
-            m_rectOutlineStart  = QPoint(tx, ty);
-            m_rectOutlineEnd    = QPoint(tx, ty);
-            m_rectOutlineActive = true;
-            update();
-        }
+        if (tile) { m_rectOutline.begin(*tile); update(); }
         break;
     }
     case Tool::TilePick: {
-        int tx, ty;
-        if (widgetToTile(ev->pos(), tx, ty)) {
-            const int id = m_map.tiles[size_t(ty * m_map.width + tx)];
+        if (tile) {
+            const int id = m_map.tiles[size_t(tile->y() * m_map.width + tile->x())];
             m_selectedTile = id;
             emit tilePicked(id);
             setTool(Tool::TilePaint);
@@ -635,44 +631,37 @@ void MapView::mousePressEvent(QMouseEvent* ev)
         break;
     }
     case Tool::RectSelect: {
-        int tx, ty;
-        if (widgetToTile(ev->pos(), tx, ty)) {
+        if (tile) {
             m_selecting   = true;
-            m_selectStart = QPoint(tx, ty);
-            m_selection   = QRect(tx, ty, 1, 1);
+            m_selectStart = *tile;
+            m_selection   = QRect(tile->x(), tile->y(), 1, 1);
             emit selectionChanged(m_selection);
             update();
         }
         break;
     }
     case Tool::RectFill: {
-        int tx, ty;
-        if (widgetToTile(ev->pos(), tx, ty)) {
+        if (tile) {
             m_rectFilling     = true;
-            m_rectFillStart   = QPoint(tx, ty);
-            m_rectFillPreview = QRect(tx, ty, 1, 1);
+            m_rectFillStart   = *tile;
+            m_rectFillPreview = QRect(tile->x(), tile->y(), 1, 1);
             update();
         }
         break;
     }
     case Tool::StampPaint: {
-        int tx, ty;
         m_stampPainting = true;
-        if (widgetToTile(ev->pos(), tx, ty))
-            applyStamp(tx, ty);
+        if (tile) applyStamp(tile->x(), tile->y());
         break;
     }
     case Tool::TilePaint: {
         startStroke();
-        int tx, ty;
-        if (widgetToTile(ev->pos(), tx, ty))
-            addToStroke(tx, ty);
+        if (tile) addToStroke(tile->x(), tile->y());
         break;
     }
     case Tool::PlaceOutpost:
     case Tool::PlaceSpawnpoint: {
-        int tx, ty;
-        if (widgetToTile(ev->pos(), tx, ty)) {
+        if (tile) {
             ObjectRef obj;
             obj.type = (m_tool == Tool::PlaceOutpost) ? "outpost" : "spawnpoint";
             // Count existing objects of this type for default name
@@ -682,8 +671,8 @@ void MapView::mousePressEvent(QMouseEvent* ev)
                     if (o.type == "outpost") ++n;
                 obj.name = QString("Outpost#%1").arg(n + 1);
             }
-            obj.x = tx;
-            obj.y = ty;
+            obj.x = tile->x();
+            obj.y = tile->y();
             applyCommand(std::make_unique<AddObject>(std::move(obj)));
         }
         break;
@@ -731,96 +720,65 @@ void MapView::mouseMoveEvent(QMouseEvent* ev)
         return;
     }
 
-    if (m_tool == Tool::TilePaint && (ev->buttons() & Qt::LeftButton)) {
-        int tx, ty;
-        if (widgetToTile(ev->pos(), tx, ty))
-            addToStroke(tx, ty);
-    }
+    const std::optional<QPoint> tile = tileAt(ev->pos());
+    const bool dragging = (ev->buttons() & Qt::LeftButton);
 
-    if (m_tool == Tool::RectSelect && m_selecting && (ev->buttons() & Qt::LeftButton)) {
-        int tx, ty;
-        if (widgetToTile(ev->pos(), tx, ty)) {
-            const int x0 = std::min(m_selectStart.x(), tx);
-            const int y0 = std::min(m_selectStart.y(), ty);
-            const int x1 = std::max(m_selectStart.x(), tx);
-            const int y1 = std::max(m_selectStart.y(), ty);
-            m_selection = QRect(x0, y0, x1 - x0 + 1, y1 - y0 + 1);
-            emit selectionChanged(m_selection);
+    // Normalised rect between the drag origin and the cursor, in tile coords.
+    auto dragRect = [](QPoint a, QPoint b) {
+        return QRect(QPoint(std::min(a.x(), b.x()), std::min(a.y(), b.y())),
+                     QPoint(std::max(a.x(), b.x()), std::max(a.y(), b.y())));
+    };
+    // A shape drag only repaints when the endpoint actually changes tile.
+    auto extendShape = [&](Drag& d) {
+        if (d.active && dragging && tile && *tile != d.end) {
+            d.end = *tile;
             update();
         }
+    };
+    auto hoverTile = [&](QPoint& hover) {
+        const QPoint next = tile ? *tile : QPoint(-1, -1);
+        const bool changed = (next != hover);
+        hover = next;
+        return changed;
+    };
+
+    if (m_tool == Tool::TilePaint && dragging && tile)
+        addToStroke(tile->x(), tile->y());
+
+    if (m_tool == Tool::RectSelect && m_selecting && dragging && tile) {
+        m_selection = dragRect(m_selectStart, *tile);
+        emit selectionChanged(m_selection);
+        update();
     }
 
-    if (m_tool == Tool::RectFill && m_rectFilling && (ev->buttons() & Qt::LeftButton)) {
-        int tx, ty;
-        if (widgetToTile(ev->pos(), tx, ty)) {
-            const int x0 = std::min(m_rectFillStart.x(), tx);
-            const int y0 = std::min(m_rectFillStart.y(), ty);
-            const int x1 = std::max(m_rectFillStart.x(), tx);
-            const int y1 = std::max(m_rectFillStart.y(), ty);
-            m_rectFillPreview = QRect(x0, y0, x1 - x0 + 1, y1 - y0 + 1);
-            update();
-        }
+    if (m_tool == Tool::RectFill && m_rectFilling && dragging && tile) {
+        m_rectFillPreview = dragRect(m_rectFillStart, *tile);
+        update();
     }
 
-    if (m_tool == Tool::EllipsePaint && m_ellipseActive && (ev->buttons() & Qt::LeftButton)) {
-        int tx, ty;
-        if (widgetToTile(ev->pos(), tx, ty)) {
-            const QPoint newEnd(tx, ty);
-            if (newEnd != m_ellipseEnd) {
-                m_ellipseEnd = newEnd;
-                update();
-            }
-        }
-    }
+    if (m_tool == Tool::EllipsePaint)  extendShape(m_ellipse);
+    if (m_tool == Tool::RectOutline)   extendShape(m_rectOutline);
 
-    if (m_tool == Tool::RectOutline && m_rectOutlineActive && (ev->buttons() & Qt::LeftButton)) {
-        int tx, ty;
-        if (widgetToTile(ev->pos(), tx, ty)) {
-            const QPoint newEnd(tx, ty);
-            if (newEnd != m_rectOutlineEnd) {
-                m_rectOutlineEnd = newEnd;
-                update();
-            }
-        }
-    }
+    if (m_tool == Tool::PlaceOutpost && hoverTile(m_outpostHoverTile))
+        update();
 
-    if (m_tool == Tool::PlaceOutpost) {
-        int tx, ty;
-        const QPoint newHover = widgetToTile(ev->pos(), tx, ty)
-                                ? QPoint(tx, ty) : QPoint(-1, -1);
-        if (newHover != m_outpostHoverTile) {
-            m_outpostHoverTile = newHover;
-            update();
-        }
-    }
-
-    if (m_tool == Tool::StampPaint) {
-        int tx, ty;
-        const QPoint newHover = widgetToTile(ev->pos(), tx, ty)
-                                ? QPoint(tx, ty) : QPoint(-1, -1);
-        if (newHover != m_stampHoverTile) {
-            m_stampHoverTile = newHover;
-            update();
-            if (m_stampPainting && newHover.x() >= 0)
-                applyStamp(tx, ty);
-        }
+    if (m_tool == Tool::StampPaint && hoverTile(m_stampHoverTile)) {
+        update();
+        if (m_stampPainting && tile)
+            applyStamp(tile->x(), tile->y());
     }
 
     if (m_tool == Tool::SelectObject && m_draggingObj &&
-        m_selectedObj >= 0 && (ev->buttons() & Qt::LeftButton)) {
-        int tx, ty;
-        if (widgetToTile(ev->pos(), tx, ty)) {
-            m_map.objects[size_t(m_selectedObj)].x = tx;
-            m_map.objects[size_t(m_selectedObj)].y = ty;
-            update();
-        }
+        m_selectedObj >= 0 && dragging && tile) {
+        m_map.objects[size_t(m_selectedObj)].x = tile->x();
+        m_map.objects[size_t(m_selectedObj)].y = tile->y();
+        update();
     }
 
     // Status bar hover info
-    int tx, ty;
-    if (widgetToTile(ev->pos(), tx, ty) && m_map.isValid()) {
-        const int id = m_map.tiles[size_t(ty * m_map.width + tx)];
-        emit tileHovered(tx, ty, id);
+    if (tile) {
+        const int id = m_map.tiles[size_t(tile->y() * m_map.width + tile->x())];
+        emit tileHovered(tile->x(), tile->y(), id);
     }
 }
 
@@ -838,27 +796,11 @@ void MapView::mouseReleaseEvent(QMouseEvent* ev)
 
     if (ev->button() == Qt::LeftButton) {
         m_stampPainting = false;
-        if (m_tool == Tool::EllipsePaint && m_ellipseActive) {
-            m_ellipseActive = false;
-            const auto tiles = computeEllipseTiles(m_ellipseStart, m_ellipseEnd,
-                                                   m_map.width, m_map.height);
-            startStroke();
-            for (const QPoint& pt : tiles)
-                addToStroke(pt.x(), pt.y());
-            commitStroke();
-            update();
-        }
-
-        if (m_tool == Tool::RectOutline && m_rectOutlineActive) {
-            m_rectOutlineActive = false;
-            const auto tiles = computeRectOutlineTiles(m_rectOutlineStart, m_rectOutlineEnd,
-                                                       m_map.width, m_map.height);
-            startStroke();
-            for (const QPoint& pt : tiles)
-                addToStroke(pt.x(), pt.y());
-            commitStroke();
-            update();
-        }
+        // Commit whichever shape tool was dragging, then clear both.
+        if (const auto shape = activeShapeTiles(); !shape.empty())
+            strokeTiles(shape);
+        m_ellipse.active     = false;
+        m_rectOutline.active = false;
 
         if (m_tool == Tool::TilePaint)
             commitStroke();
