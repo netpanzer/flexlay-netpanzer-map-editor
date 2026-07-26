@@ -73,21 +73,32 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent)
     setCentralWidget(m_view);
 
     m_tileBrowser = new TileBrowser(this);
+    // restoreState() matches docks by objectName and silently skips any without
+    // one, so these must be set and must stay stable across releases.
+    m_tileBrowser->setObjectName("tileBrowserDock");
     addDockWidget(Qt::LeftDockWidgetArea, m_tileBrowser);
     setDockTooltips(m_tileBrowser);
     m_tileBrowser->hide();  // hidden by default, opened from View menu
 
     m_stampPanel = new StampPanel(this);
+    m_stampPanel->setObjectName("stampPanelDock");
     addDockWidget(Qt::LeftDockWidgetArea, m_stampPanel);
     setDockTooltips(m_stampPanel);
 
     m_minimap = new Minimap(this);
+    m_minimap->setObjectName("minimapDock");
     addDockWidget(Qt::RightDockWidgetArea, m_minimap);
     setDockTooltips(m_minimap);
 
     setupMenus();
     setupToolbar();
     setupStatusBar();
+
+    // Restore the window and dock layout. Both are no-ops on a blank value, so
+    // a first run keeps the defaults set above.
+    const QSettings settings;
+    restoreGeometry(settings.value("mainWindow/geometry").toByteArray());
+    restoreState(settings.value("mainWindow/state").toByteArray());
 
     // Auto-load any .stamps.json files found in data/stamps/ next to the binary
     const QString appDir = QCoreApplication::applicationDirPath();
@@ -678,10 +689,14 @@ bool MainWindow::maybeSave()
 
 void MainWindow::closeEvent(QCloseEvent* e)
 {
-    if (maybeSave())
-        e->accept();
-    else
+    if (!maybeSave()) {
         e->ignore();
+        return;
+    }
+    QSettings settings;
+    settings.setValue("mainWindow/geometry", saveGeometry());
+    settings.setValue("mainWindow/state", saveState());
+    e->accept();
 }
 
 // ---------------------------------------------------------------------------
