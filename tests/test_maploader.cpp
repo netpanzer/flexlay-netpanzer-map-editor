@@ -1,8 +1,6 @@
 #include <QtTest/QtTest>
-#include <QTemporaryFile>
 #include <QTemporaryDir>
 #include <QByteArray>
-#include <cstring>
 #include <cstdint>
 
 #include "maploader.h"

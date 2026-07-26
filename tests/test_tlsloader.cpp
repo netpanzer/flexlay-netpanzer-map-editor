@@ -1,7 +1,5 @@
 #include <QtTest/QtTest>
 #include <QByteArray>
-#include <QFile>
-#include <QTemporaryDir>
 #include <cstdint>
 #include <cstring>
 #include <vector>
@@ -189,7 +187,8 @@ private slots:
     {
         const int N = 5, COLS = 3, W = 32, H = 32;
         const QString path = writeTempFile(makeTls(N, W, H), ".tls");
-        Tileset ts; ts.load(path);
+        Tileset ts;
+        QVERIFY(ts.load(path));
 
         // tile 0 → col 0, row 0
         QCOMPARE(ts.atlasRect(0, COLS), QRect(0, 0, W, H));
