@@ -52,9 +52,8 @@ if host_machine.system() == 'linux'
   install_data('netpanzer-editor.desktop',
     install_dir : get_option('datadir') / 'applications')
 
-  install_data('data/images/icons24/stock_save.png',
-    install_dir : get_option('datadir') / 'pixmaps',
-    rename      : 'netpanzer-editor.png')
+  install_data('data/images/netpanzer-editor.png',
+    install_dir : get_option('datadir') / 'pixmaps')
 
   install_data(['COPYING', 'README.md'],
     install_dir : get_option('datadir') / 'doc' / 'netpanzer-editor')

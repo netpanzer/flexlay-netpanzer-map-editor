@@ -1,5 +1,6 @@
 #include <QApplication>
 #include <QFile>
+#include <QIcon>
 #include "mainwindow.h"
 
 int main(int argc, char* argv[])
@@ -9,6 +10,7 @@ int main(int argc, char* argv[])
     QApplication app(argc, argv);
     app.setApplicationName("netPanzer Map Editor");
     app.setOrganizationName("netpanzer");
+    app.setWindowIcon(QIcon(":/netpanzer-editor.png"));
 
     QFile qss(":/style.qss");
     if (qss.open(QFile::ReadOnly))

@@ -1,5 +1,6 @@
 <RCC>
     <qresource prefix="/">
         <file>style.qss</file>
+        <file alias="netpanzer-editor.png">../data/images/netpanzer-editor-64.png</file>
     </qresource>
 </RCC>
