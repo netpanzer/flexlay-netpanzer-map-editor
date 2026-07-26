@@ -14,8 +14,8 @@ meson test -C build --print-errorlogs   # runs both test_maploader and test_tlsl
 Run a single test executable directly (Qt Test supports filtering):
 
 ```sh
-./build/test_maploader                       # all 14 cases
-./build/test_maploader testRoundTrip         # one slot
+./build/test_maploader                       # all 13 cases
+./build/test_maploader testSaveNpm_roundTrip # one slot
 ./build/test_tlsloader -platform offscreen   # tlsloader needs an offscreen QPA
 ```
 
@@ -36,7 +36,7 @@ This is a Qt5 + Meson C++17 port of an older ClanLib + SCons + Ruby editor. The 
 
 A netPanzer map is up to three sibling files sharing a base name: binary `.npm` (header + `uint16` tile grid + optional palette-indexed thumbnail), plain-text `.opt` (outposts) and `.spn` (spawn points). All multi-byte ints are little-endian. The full binary layout is in `docs/map-format.md`; the offsets are mirrored in `src/npmformat.h` and any change to one must match the other. `.spn` files in the wild sometimes omit newlines and concatenate tokens — the parser normalises by inserting a newline before each `Location:` token, so don't "fix" that as a bug.
 
-`src/objects.h` defines the model: `Map` holds tiles as `QVector<uint16_t>` plus metadata; `ObjectRef` (type, name, x, y) covers both outposts and spawn points. `maploader.{h,cpp}` is the only code that touches the on-disk binary format — round-trip is verified by `tests/test_maploader.cpp`.
+`src/objects.h` defines the model: `Map` holds tiles as `std::vector<uint16_t>` plus metadata; `ObjectRef` (type, name, x, y) covers both outposts and spawn points. `maploader.{h,cpp}` is the only code that touches the on-disk binary format — round-trip is verified by `tests/test_maploader.cpp`.
 
 ### Tileset rendering
 
@@ -44,7 +44,7 @@ A netPanzer map is up to three sibling files sharing a base name: binary `.npm` 
 
 ### Tool / command model
 
-`MapView` (`src/mapview.{h,cpp}`) owns a `Tool` enum (TilePaint, Ellipse, RectSelect/Fill/Outline, StampPaint, Pick, PlaceOutpost, PlaceSpawnpoint, SelectObject). Edits go through polymorphic `Command` subclasses in `src/commands.h` (TileBatch, AddObject, RemoveObject, MoveObject, RenameObject) pushed onto an undo stack — drag-paint strokes batch into a single TileBatch so undo restores the whole stroke.
+`MapView` (`src/mapview.{h,cpp}`) owns a `Tool` enum (TilePaint, EllipsePaint, RectOutline, TilePick, RectSelect, RectFill, StampPaint, PlaceOutpost, PlaceSpawnpoint, SelectObject). Edits go through polymorphic `Command` subclasses in `src/commands.h` (TileBatch, AddObject, RemoveObject, MoveObject, RenameObject) pushed onto an undo stack — drag-paint strokes batch into a single TileBatch so undo restores the whole stroke.
 
 ### Qt build wiring
 
@@ -54,9 +54,13 @@ A netPanzer map is up to three sibling files sharing a base name: binary `.npm` 
 
 `data/stamps/*.stamp.json` is auto-loaded at startup; users can also save selections to arbitrary paths. The `StampWidget::addStamp` path was previously a footgun — adding a stamp must auto-select it and emit `stampSelected`, otherwise the subsequent stamp-paint silently no-ops.
 
+### Windows packaging
+
+`packaging/windows/` holds the Inno Setup script, the `.rc` that embeds the icon into the exe, and the generated `.ico`. Two things there are easy to break: the `.rc` uses the literal resource ID `1` (a symbolic name would emit a *named* resource, which Windows may ignore when picking an exe's icon), and the installer must ship `data/stamps` as a recursive wildcard rather than named files, or new stamps silently stop reaching Windows users.
+
 ### Game data location
 
-When testing against real maps/tilesets, the reference install is at `/home/andy/src/netpanzer/data/` — maps in `maps/`, tileset at `wads/summer12mb/SummerDay/summer12mb.tls`, palette at `wads/netp.act`.
+Testing against real content needs a netPanzer data directory (a game install or a checkout of the `netpanzer` repo). Inside it: maps in `maps/`, the reference tileset at `wads/summer12mb/SummerDay/summer12mb.tls`, and the palette at `wads/netp.act` — `tlsloader` searches parent directories for that `netp.act`, so keeping the `wads/` layout intact matters more than where the tree lives.
 
 ## Things worth knowing
 
