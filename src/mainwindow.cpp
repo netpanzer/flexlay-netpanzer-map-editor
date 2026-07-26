@@ -35,6 +35,22 @@
 
 static constexpr int MAX_RECENT = 8;
 
+// Single source of truth for the tool actions: menu label (with mnemonic),
+// toolbar text, and shortcut. The status-bar name is the label minus '&'.
+struct ToolDef { const char* label; const char* iconText; Tool tool; QKeySequence key; };
+static const ToolDef TOOL_DEFS[] = {
+    { "Tile &Paint",       "Paint",    Tool::TilePaint,       Qt::Key_T },
+    { "&Ellipse Paint",    "Ellipse",  Tool::EllipsePaint,    Qt::Key_E },
+    { "Rect &Outline",     "Outline",  Tool::RectOutline,     Qt::Key_U },
+    { "Tile P&ick",        "Pick",     Tool::TilePick,        Qt::Key_I },
+    { "&Rect Select",      "Rect Sel", Tool::RectSelect,      Qt::Key_R },
+    { "Rect &Fill",        "Fill",     Tool::RectFill,        Qt::Key_F },
+    { "&Stamp Paint",      "Stamp",    Tool::StampPaint,      Qt::Key_M },
+    { "Place &Outpost",    "Outpost",  Tool::PlaceOutpost,    Qt::Key_O },
+    { "Place &Spawnpoint", "Spawn",    Tool::PlaceSpawnpoint, Qt::Key_S },
+    { "Se&lect Object",    "Select",   Tool::SelectObject,    Qt::Key_V },
+};
+
 // ---------------------------------------------------------------------------
 // Constructor
 
@@ -200,20 +216,7 @@ void MainWindow::setupMenus()
     m_toolGroup = new QActionGroup(this);
     m_toolGroup->setExclusive(true);
 
-    struct ToolDef { const char* label; const char* iconText; Tool tool; QKeySequence key; };
-    const ToolDef defs[] = {
-        { "Tile &Paint",       "Paint",    Tool::TilePaint,       Qt::Key_T },
-        { "&Ellipse Paint",    "Ellipse",  Tool::EllipsePaint,    Qt::Key_E },
-        { "Rect &Outline",     "Outline",  Tool::RectOutline,     Qt::Key_U },
-        { "Tile P&ick",        "Pick",     Tool::TilePick,        Qt::Key_I },
-        { "&Rect Select",      "Rect Sel", Tool::RectSelect,      Qt::Key_R },
-        { "Rect &Fill",        "Fill",     Tool::RectFill,        Qt::Key_F },
-        { "&Stamp Paint",      "Stamp",    Tool::StampPaint,      Qt::Key_M },
-        { "Place &Outpost",    "Outpost",  Tool::PlaceOutpost,    Qt::Key_O },
-        { "Place &Spawnpoint", "Spawn",    Tool::PlaceSpawnpoint, Qt::Key_S },
-        { "Se&lect Object",    "Select",   Tool::SelectObject,    Qt::Key_V },
-    };
-    for (const auto& d : defs) {
+    for (const auto& d : TOOL_DEFS) {
         QAction* a = tools->addAction(d.label);
         a->setCheckable(true);
         a->setShortcut(d.key);
@@ -707,11 +710,12 @@ void MainWindow::onSetTool(Tool t)
 {
     m_view->setTool(t);
 
-    const char* names[] = {"Tile Paint", "Ellipse Paint", "Rect Outline", "Tile Pick",
-                            "Rect Select", "Rect Fill",
-                            "Stamp Paint", "Place Outpost", "Place Spawnpoint", "Select Object"};
-    statusBar()->showMessage(
-        QString("Tool: %1").arg(names[int(t)]), 2000);
+    for (const auto& d : TOOL_DEFS) {
+        if (d.tool != t) continue;
+        statusBar()->showMessage(
+            QString("Tool: %1").arg(QString(d.label).remove('&')), 2000);
+        break;
+    }
 }
 
 // ---------------------------------------------------------------------------
