@@ -8,7 +8,6 @@
 #include <QLabel>
 #include <QPushButton>
 #include <QScrollBar>
-#include <QDebug>
 #include <algorithm>
 
 // ---------------------------------------------------------------------------
@@ -320,10 +319,7 @@ void TileBrowser::selectTile(int id)
     const int c   = m_widget->cols();
     const int row = (c > 0) ? id / c : 0;
     const int y   = row * m_widget->tileSize();
-    auto* vsb = m_scroll->verticalScrollBar();
-    qDebug() << "selectTile" << id << "cols" << c << "row" << row
-             << "y" << y << "sbMax" << vsb->maximum() << "wWidth" << m_widget->width();
-    vsb->setValue(y);
+    m_scroll->verticalScrollBar()->setValue(y);
     emit tileSelected(id);
 }
 
