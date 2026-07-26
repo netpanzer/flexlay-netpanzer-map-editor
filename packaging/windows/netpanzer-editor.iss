@@ -16,11 +16,20 @@
 AppId={{8F3C1A64-7D2E-4B59-9E30-5A1C6B84D7F2}
 AppName={#AppName}
 AppVersion={#VERSION}
-; Without this Setup runs in 32-bit mode and {autopf} would resolve to
-; the x86 Program Files for what is an x86_64 build. "x64" rather than
-; "x64compatible" because the latter needs Inno Setup 6.3+.
-ArchitecturesInstallIn64BitMode=x64
-ArchitecturesAllowed=x64
+; Without this Setup runs in 32-bit mode and {autopf} would resolve to the
+; x86 Program Files for what is an x86_64 build.
+;
+; x64compatible also covers ARM64 Windows 11 running x64 binaries, but errors
+; before Inno 6.3, and the runner's version is not pinned — so let the
+; preprocessor choose. Ver packs the version as major<<24 | minor<<16 |
+; revision<<8 | build, making 6.3.0 equal to 6*2^24 + 3*2^16 = 100859904.
+#if Ver >= 100859904
+  #define ArchIds "x64compatible"
+#else
+  #define ArchIds "x64"
+#endif
+ArchitecturesInstallIn64BitMode={#ArchIds}
+ArchitecturesAllowed={#ArchIds}
 AppPublisher={#Publisher}
 AppPublisherURL={#AppURL}
 AppSupportURL={#IssuesURL}
