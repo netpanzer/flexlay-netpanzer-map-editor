@@ -236,7 +236,7 @@ void MainWindow::setupMenus()
     view->addSeparator();
 
     QAction* fitAct = view->addAction("&Fit to Window");
-    fitAct->setShortcut(Qt::Key_F);
+    fitAct->setShortcut(QKeySequence("Ctrl+0"));
     connect(fitAct, &QAction::triggered, this, &MainWindow::onFitToWindow);
 
     QAction* zoomInAct = view->addAction("Zoom &In");
