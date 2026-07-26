@@ -376,6 +376,165 @@ std::vector<QPoint> MapView::computeRectOutlineTiles(QPoint a, QPoint b, int map
 // ---------------------------------------------------------------------------
 // Paint event
 
+void MapView::drawTiles(QPainter& p, QRect visible) const
+{
+    const bool haveAtlas = !m_atlasPixmap.isNull();
+    for (int y = visible.top(); y <= visible.bottom(); ++y)
+        for (int x = visible.left(); x <= visible.right(); ++x) {
+            const QRectF dst(x * TILE_SIZE, y * TILE_SIZE, TILE_SIZE, TILE_SIZE);
+            const int id = m_map.tiles[size_t(y * m_map.width + x)];
+            if (haveAtlas)
+                p.drawPixmap(dst, m_atlasPixmap,
+                             QRectF(m_tileset->atlasRect(id, ATLAS_COLS)));
+            else  // no tileset loaded — a distinct colour per id still reads as a map
+                p.fillRect(dst, QColor::fromHsv((id * 37) % 360, 180, 200));
+        }
+}
+
+void MapView::drawStampGhost(QPainter& p) const
+{
+    if (m_tool != Tool::StampPaint || !m_currentStamp ||
+        m_stampHoverTile.x() < 0 || m_atlasPixmap.isNull())
+        return;
+
+    const int tx = m_stampHoverTile.x();
+    const int ty = m_stampHoverTile.y();
+    const QRectF area(tx * TILE_SIZE, ty * TILE_SIZE,
+                      m_currentStamp->width  * TILE_SIZE,
+                      m_currentStamp->height * TILE_SIZE);
+
+    p.setOpacity(0.4);
+    for (int row = 0; row < m_currentStamp->height; ++row)
+        for (int col = 0; col < m_currentStamp->width; ++col) {
+            const int id = m_currentStamp->tiles[size_t(row * m_currentStamp->width + col)];
+            p.drawPixmap(QRectF((tx + col) * TILE_SIZE, (ty + row) * TILE_SIZE,
+                                TILE_SIZE, TILE_SIZE),
+                         m_atlasPixmap, QRectF(m_tileset->atlasRect(id, ATLAS_COLS)));
+        }
+
+    // Blue tint plus a dashed border so the preview reads as not-yet-placed
+    p.setOpacity(0.25);
+    p.fillRect(area, QColor(0, 120, 255));
+    p.setOpacity(1.0);
+    p.setPen(QPen(QColor(0, 180, 255), 1, Qt::DashLine));
+    p.setBrush(Qt::NoBrush);
+    p.drawRect(area);
+}
+
+void MapView::drawRectFillPreview(QPainter& p) const
+{
+    if (!m_rectFilling || m_rectFillPreview.isNull()) return;
+    const QRectF fr(m_rectFillPreview.x() * TILE_SIZE,
+                    m_rectFillPreview.y() * TILE_SIZE,
+                    m_rectFillPreview.width()  * TILE_SIZE,
+                    m_rectFillPreview.height() * TILE_SIZE);
+    p.setOpacity(0.35);
+    p.fillRect(fr, QColor(0, 180, 255));
+    p.setOpacity(1.0);
+    p.setPen(QPen(QColor(0, 180, 255), 1));
+    p.setBrush(Qt::NoBrush);
+    p.drawRect(fr);
+}
+
+void MapView::drawSelection(QPainter& p) const
+{
+    if (m_selection.isNull()) return;
+    const QRectF sel(m_selection.x() * TILE_SIZE,
+                     m_selection.y() * TILE_SIZE,
+                     m_selection.width()  * TILE_SIZE,
+                     m_selection.height() * TILE_SIZE);
+    p.setOpacity(0.25);
+    p.fillRect(sel, QColor(255, 220, 0));
+    p.setOpacity(1.0);
+    p.setBrush(Qt::NoBrush);
+    p.setPen(QPen(QColor(255, 220, 0), 0));
+    p.drawRect(sel);
+}
+
+void MapView::drawGrid(QPainter& p, QRect visible) const
+{
+    if (!m_showGrid || m_zoom <= 0.2) return;
+    const int x0 = visible.left(),  x1 = visible.right();
+    const int y0 = visible.top(),   y1 = visible.bottom();
+    p.setPen(QPen(QColor(0, 0, 0, 80), 0));
+    for (int y = y0; y <= y1 + 1; ++y)
+        p.drawLine(QPointF(x0 * TILE_SIZE, y * TILE_SIZE),
+                   QPointF((x1 + 1) * TILE_SIZE, y * TILE_SIZE));
+    for (int x = x0; x <= x1 + 1; ++x)
+        p.drawLine(QPointF(x * TILE_SIZE, y0 * TILE_SIZE),
+                   QPointF(x * TILE_SIZE, (y1 + 1) * TILE_SIZE));
+}
+
+void MapView::drawObjects(QPainter& p) const
+{
+    p.setRenderHint(QPainter::Antialiasing);
+    for (int i = 0; i < int(m_map.objects.size()); ++i) {
+        const auto& obj = m_map.objects[size_t(i)];
+        const QPointF centre((obj.x + 0.5) * TILE_SIZE, (obj.y + 0.5) * TILE_SIZE);
+        // Keep markers clickable-looking when zoomed far out
+        const double r = std::max(TILE_SIZE * 0.45, 5.0 / m_zoom);
+
+        const bool selected = (i == m_selectedObj);
+        QColor fill = (obj.type == "outpost") ? QColor(220, 60, 60, 210)
+                                              : QColor(60, 100, 220, 210);
+        if (selected) fill = fill.lighter(140);
+
+        p.setBrush(fill);
+        p.setPen(QPen(selected ? Qt::yellow : Qt::white, selected ? 1.5 : 0.5));
+        p.drawEllipse(centre, r, r);
+
+        if (m_zoom >= 0.35) {
+            p.setPen(Qt::white);
+            QFont f = p.font();
+            f.setPixelSize(std::max(6, int(10 / m_zoom)));
+            p.setFont(f);
+            p.drawText(QRectF(centre.x() - r, centre.y() - r, r * 2, r * 2),
+                       Qt::AlignCenter, obj.type == "outpost" ? "O" : "S");
+        }
+    }
+}
+
+void MapView::drawShapePreview(QPainter& p) const
+{
+    const auto shape = activeShapeTiles();
+    if (shape.empty()) return;
+    p.setOpacity(0.55);
+    p.setPen(Qt::NoPen);
+    for (const QPoint& pt : shape)
+        p.fillRect(QRectF(pt.x() * TILE_SIZE, pt.y() * TILE_SIZE,
+                          TILE_SIZE, TILE_SIZE), QColor(255, 220, 0, 180));
+    p.setOpacity(1.0);
+}
+
+void MapView::drawCapturePads(QPainter& p) const
+{
+    // The game places the pad at marker_center + (224, 48) px with a
+    // ±48 x ±32 px capture box (Objective.cpp, occupation_pad_offset).
+    auto pad = [&](QPointF markerCentre, bool ghost) {
+        const QPointF padCentre = markerCentre + QPointF(224, 48);
+        const QRectF  padRect(padCentre.x() - 48, padCentre.y() - 32, 96, 64);
+        p.setOpacity(ghost ? 0.45 : 0.75);
+        p.setBrush(QColor(255, 200, 0, 50));
+        p.setPen(QPen(QColor(255, 200, 0), ghost ? 0.5 : 1.0));
+        p.drawRect(padRect);
+        p.setBrush(Qt::NoBrush);
+        p.setPen(QPen(QColor(255, 200, 0, 160), 0.5, Qt::DashLine));
+        p.drawLine(markerCentre, padCentre);
+        p.setOpacity(1.0);
+    };
+    auto tileCentre = [](int tx, int ty) {
+        return QPointF((tx + 0.5) * TILE_SIZE, (ty + 0.5) * TILE_SIZE);
+    };
+
+    if (m_selectedObj >= 0 && m_selectedObj < int(m_map.objects.size())) {
+        const auto& obj = m_map.objects[size_t(m_selectedObj)];
+        if (obj.type == "outpost")
+            pad(tileCentre(obj.x, obj.y), false);
+    }
+    if (m_tool == Tool::PlaceOutpost && m_outpostHoverTile.x() >= 0)
+        pad(tileCentre(m_outpostHoverTile.x(), m_outpostHoverTile.y()), true);
+}
+
 void MapView::paintEvent(QPaintEvent*)
 {
     QPainter p(this);
@@ -395,174 +554,26 @@ void MapView::paintEvent(QPaintEvent*)
     p.translate(m_pan);
     p.scale(m_zoom, m_zoom);
 
-    // Visible tile range
-    const QRectF visible = p.transform().inverted().mapRect(QRectF(rect()));
-    const int x0 = std::max(0, int(visible.left()   / TILE_SIZE));
-    const int y0 = std::max(0, int(visible.top()    / TILE_SIZE));
-    const int x1 = std::min(m_map.width  - 1, int(visible.right()  / TILE_SIZE));
-    const int y1 = std::min(m_map.height - 1, int(visible.bottom() / TILE_SIZE));
+    // Inclusive tile range currently on screen, clamped to the map.
+    const QRectF area = p.transform().inverted().mapRect(QRectF(rect()));
+    const QRect visible(QPoint(std::max(0, int(area.left() / TILE_SIZE)),
+                               std::max(0, int(area.top()  / TILE_SIZE))),
+                        QPoint(std::min(m_map.width  - 1, int(area.right()  / TILE_SIZE)),
+                               std::min(m_map.height - 1, int(area.bottom() / TILE_SIZE))));
 
-    // Tiles
-    if (!m_atlasPixmap.isNull()) {
-        for (int y = y0; y <= y1; ++y)
-            for (int x = x0; x <= x1; ++x) {
-                const int id = m_map.tiles[size_t(y * m_map.width + x)];
-                p.drawPixmap(QRectF(x * TILE_SIZE, y * TILE_SIZE, TILE_SIZE, TILE_SIZE),
-                             m_atlasPixmap,
-                             QRectF(m_tileset->atlasRect(id, ATLAS_COLS)));
-            }
-    } else {
-        for (int y = y0; y <= y1; ++y)
-            for (int x = x0; x <= x1; ++x) {
-                const int v = m_map.tiles[size_t(y * m_map.width + x)];
-                p.fillRect(QRectF(x * TILE_SIZE, y * TILE_SIZE, TILE_SIZE, TILE_SIZE),
-                           QColor::fromHsv((v * 37) % 360, 180, 200));
-            }
-    }
-
-    // Stamp ghost preview
-    if (m_tool == Tool::StampPaint && m_currentStamp &&
-        m_stampHoverTile.x() >= 0 && !m_atlasPixmap.isNull()) {
-        const int tx = m_stampHoverTile.x();
-        const int ty = m_stampHoverTile.y();
-        p.setOpacity(0.4);
-        for (int row = 0; row < m_currentStamp->height; ++row) {
-            for (int col = 0; col < m_currentStamp->width; ++col) {
-                const int id  = m_currentStamp->tiles[size_t(row * m_currentStamp->width + col)];
-                const QRect src = m_tileset->atlasRect(id, ATLAS_COLS);
-                p.drawPixmap(
-                    QRectF((tx + col) * TILE_SIZE, (ty + row) * TILE_SIZE, TILE_SIZE, TILE_SIZE),
-                    m_atlasPixmap, QRectF(src));
-            }
-        }
-        // Blue tint overlay so the preview is clearly distinct from placed tiles
-        p.setOpacity(0.25);
-        p.fillRect(QRectF(tx * TILE_SIZE, ty * TILE_SIZE,
-                          m_currentStamp->width  * TILE_SIZE,
-                          m_currentStamp->height * TILE_SIZE),
-                   QColor(0, 120, 255));
-        p.setOpacity(1.0);
-        // Dashed border around the preview region
-        QPen pen(QColor(0, 180, 255), 1, Qt::DashLine);
-        p.setPen(pen);
-        p.setBrush(Qt::NoBrush);
-        p.drawRect(QRectF(tx * TILE_SIZE, ty * TILE_SIZE,
-                          m_currentStamp->width  * TILE_SIZE,
-                          m_currentStamp->height * TILE_SIZE));
-    }
-
-    // Rect fill preview
-    if (m_rectFilling && !m_rectFillPreview.isNull()) {
-        const QRectF fr(m_rectFillPreview.x() * TILE_SIZE,
-                        m_rectFillPreview.y() * TILE_SIZE,
-                        m_rectFillPreview.width()  * TILE_SIZE,
-                        m_rectFillPreview.height() * TILE_SIZE);
-        p.setOpacity(0.35);
-        p.fillRect(fr, QColor(0, 180, 255));
-        p.setOpacity(1.0);
-        p.setPen(QPen(QColor(0, 180, 255), 1));
-        p.setBrush(Qt::NoBrush);
-        p.drawRect(fr);
-    }
-
-    // Selection highlight
-    if (!m_selection.isNull()) {
-        const QRectF selRect(m_selection.x() * TILE_SIZE,
-                             m_selection.y() * TILE_SIZE,
-                             m_selection.width()  * TILE_SIZE,
-                             m_selection.height() * TILE_SIZE);
-        p.setOpacity(0.25);
-        p.fillRect(selRect, QColor(255, 220, 0));
-        p.setOpacity(1.0);
-        p.setBrush(Qt::NoBrush);
-        p.setPen(QPen(QColor(255, 220, 0), 0));
-        p.drawRect(selRect);
-    }
-
-    // Grid
-    if (m_showGrid && m_zoom > 0.2) {
-        p.setPen(QPen(QColor(0, 0, 0, 80), 0));
-        for (int y = y0; y <= y1 + 1; ++y)
-            p.drawLine(QPointF(x0 * TILE_SIZE, y * TILE_SIZE),
-                       QPointF((x1 + 1) * TILE_SIZE, y * TILE_SIZE));
-        for (int x = x0; x <= x1 + 1; ++x)
-            p.drawLine(QPointF(x * TILE_SIZE, y0 * TILE_SIZE),
-                       QPointF(x * TILE_SIZE, (y1 + 1) * TILE_SIZE));
-    }
-
-    // Objects
-    p.setRenderHint(QPainter::Antialiasing);
-    for (int i = 0; i < int(m_map.objects.size()); ++i) {
-        const auto& obj = m_map.objects[size_t(i)];
-        const QPointF centre((obj.x + 0.5) * TILE_SIZE, (obj.y + 0.5) * TILE_SIZE);
-        const double r = std::max(TILE_SIZE * 0.45, 5.0 / m_zoom);
-
-        const bool selected = (i == m_selectedObj);
-        QColor fill = (obj.type == "outpost") ? QColor(220, 60, 60, 210)
-                                              : QColor(60, 100, 220, 210);
-        if (selected) fill = fill.lighter(140);
-
-        p.setBrush(fill);
-        p.setPen(QPen(selected ? Qt::yellow : Qt::white, selected ? 1.5 : 0.5));
-        p.drawEllipse(centre, r, r);
-
-        if (m_zoom >= 0.35) {
-            p.setPen(Qt::white);
-            QFont f = p.font();
-            f.setPixelSize(std::max(6, int(10 / m_zoom)));
-            p.setFont(f);
-            p.drawText(QRectF(centre.x() - r, centre.y() - r, r * 2, r * 2),
-                       Qt::AlignCenter,
-                       obj.type == "outpost" ? "O" : "S");
-        }
-    }
-
-    // Shape paint preview (ellipse / rect outline share this)
-    if (const auto shape = activeShapeTiles(); !shape.empty()) {
-        p.setOpacity(0.55);
-        p.setPen(Qt::NoPen);
-        for (const QPoint& pt : shape)
-            p.fillRect(QRectF(pt.x() * TILE_SIZE, pt.y() * TILE_SIZE,
-                              TILE_SIZE, TILE_SIZE), QColor(255, 220, 0, 180));
-        p.setOpacity(1.0);
-    }
-
-    // Outpost capture-pad overlay.
-    // The game places the pad at marker_center + (224, 48) px with a
-    // ±48 x ±32 px capture box (Objective.cpp, occupation_pad_offset).
-    auto drawCapturePad = [&](QPointF markerCentre, bool ghost) {
-        const QPointF padCentre = markerCentre + QPointF(224, 48);
-        const QRectF  padRect(padCentre.x() - 48, padCentre.y() - 32, 96, 64);
-        p.setOpacity(ghost ? 0.45 : 0.75);
-        p.setBrush(QColor(255, 200, 0, 50));
-        p.setPen(QPen(QColor(255, 200, 0), ghost ? 0.5 : 1.0));
-        p.drawRect(padRect);
-        p.setBrush(Qt::NoBrush);
-        p.setPen(QPen(QColor(255, 200, 0, 160), 0.5, Qt::DashLine));
-        p.drawLine(markerCentre, padCentre);
-        p.setOpacity(1.0);
-    };
-
-    // Selected outpost
-    if (m_selectedObj >= 0 && m_selectedObj < int(m_map.objects.size())) {
-        const auto& obj = m_map.objects[size_t(m_selectedObj)];
-        if (obj.type == "outpost")
-            drawCapturePad(QPointF((obj.x + 0.5) * TILE_SIZE,
-                                   (obj.y + 0.5) * TILE_SIZE), false);
-    }
-
-    // Ghost while hovering to place
-    if (m_tool == Tool::PlaceOutpost && m_outpostHoverTile.x() >= 0) {
-        drawCapturePad(QPointF((m_outpostHoverTile.x() + 0.5) * TILE_SIZE,
-                                (m_outpostHoverTile.y() + 0.5) * TILE_SIZE), true);
-    }
+    drawTiles(p, visible);
+    drawStampGhost(p);
+    drawRectFillPreview(p);
+    drawSelection(p);
+    drawGrid(p, visible);
+    drawObjects(p);
+    drawShapePreview(p);
+    drawCapturePads(p);
 
     // Map border
     p.setBrush(Qt::NoBrush);
     p.setPen(QPen(QColor(200, 200, 200), 0));
-    p.drawRect(QRectF(0, 0,
-                      m_map.width  * TILE_SIZE,
-                      m_map.height * TILE_SIZE));
+    p.drawRect(QRectF(0, 0, m_map.width * TILE_SIZE, m_map.height * TILE_SIZE));
     p.restore();
 }
 

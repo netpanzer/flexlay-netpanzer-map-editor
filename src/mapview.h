@@ -182,6 +182,18 @@ private:
     // Tiles the active shape tool would paint, or empty when none is dragging.
     std::vector<QPoint> activeShapeTiles() const;
 
+    // paintEvent stages, in draw order. All draw in map-pixel coordinates, with
+    // the pan/zoom transform already applied by the caller. `visible` is the
+    // inclusive tile range currently on screen.
+    void drawTiles(QPainter& p, QRect visible) const;
+    void drawStampGhost(QPainter& p) const;
+    void drawRectFillPreview(QPainter& p) const;
+    void drawSelection(QPainter& p) const;
+    void drawGrid(QPainter& p, QRect visible) const;
+    void drawObjects(QPainter& p) const;
+    void drawShapePreview(QPainter& p) const;
+    void drawCapturePads(QPainter& p) const;
+
     // Pan state (middle button)
     bool   m_panning   = false;
     QPoint m_lastMouse;
