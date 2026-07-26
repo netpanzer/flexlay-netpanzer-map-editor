@@ -230,16 +230,18 @@ private slots:
         // 4 tiles arranged in 2 cols → 2×32 wide, 2×32 tall
         // 4 tiles arranged in 4 cols → 4×32 wide, 1×32 tall
         const QString path = writeTempFile(makeTls(4), ".tls");
-        Tileset ts; ts.load(path);
+        Tileset ts;
+        QVERIFY(ts.load(path));
 
         const QImage& a2 = ts.atlas(2);
         QCOMPARE(a2.width(),  2 * 32);
         QCOMPARE(a2.height(), 2 * 32);
 
-        // Calling atlas(2) again must return identical dimensions (cached)
-        const QImage& a2b = ts.atlas(2);
-        QCOMPARE(a2b.width(),  a2.width());
-        QCOMPARE(a2b.height(), a2.height());
+        // Calling atlas(2) again must hand back the cached image rather than
+        // rebuild it. atlas() always returns a reference to the same member,
+        // so compare cacheKey(), which changes when the QImage is rebuilt.
+        const qint64 key2 = a2.cacheKey();
+        QCOMPARE(ts.atlas(2).cacheKey(), key2);
 
         // Different col count → different atlas dimensions
         const QImage& a4 = ts.atlas(4);
