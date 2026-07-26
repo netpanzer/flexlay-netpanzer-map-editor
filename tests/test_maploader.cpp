@@ -7,6 +7,7 @@
 
 #include "maploader.h"
 #include "npmformat.h"
+#include "testutil.h"
 
 // ---------------------------------------------------------------------------
 // Helper: write a well-formed .npm binary with the given tiles.
@@ -45,21 +46,6 @@ static QByteArray makeNpm(int w, int h,
         writeU16(int(NPM_OFF_TILES + i * 2), v);
     }
     return buf;
-}
-
-// Helper: write buf to a temp file and return the path.
-static QString writeTempFile(const QByteArray& data, const QString& suffix)
-{
-    // QTemporaryFile auto-deletes on destruction; we manage lifetime via the dir.
-    static QTemporaryDir tmpDir;
-    static int counter = 0;
-    const QString path = tmpDir.filePath(
-        QString("test_%1%2").arg(++counter).arg(suffix));
-    QFile f(path);
-    if (!f.open(QIODevice::WriteOnly))
-        return {};
-    f.write(data);
-    return path;
 }
 
 // ---------------------------------------------------------------------------

@@ -8,6 +8,7 @@
 
 #include "tlsloader.h"
 #include "npmformat.h"
+#include "testutil.h"
 
 // ---------------------------------------------------------------------------
 // Helper: synthesise a minimal well-formed .tls binary.
@@ -62,17 +63,6 @@ static QByteArray makeTls(int tileCount, int tileW = 32, int tileH = 32)
     }
 
     return QByteArray(reinterpret_cast<char*>(buf.data()), totalSize);
-}
-
-static QString writeTempFile(const QByteArray& data, const QString& suffix)
-{
-    static QTemporaryDir tmpDir;
-    static int counter = 0;
-    const QString path = tmpDir.filePath(QString("tls_%1%2").arg(++counter).arg(suffix));
-    QFile f(path);
-    if (!f.open(QIODevice::WriteOnly)) return {};
-    f.write(data);
-    return path;
 }
 
 // ---------------------------------------------------------------------------
