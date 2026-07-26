@@ -232,12 +232,6 @@ private slots:
         const QString path = writeTempFile(optText.toUtf8(), ".opt");
 
         // Create a dummy .npm with matching base name
-        Map m;
-        m.width  = 128;
-        m.height = 128;
-        m.tiles.assign(128 * 128, 0);
-        // Write the npm to the same directory
-        static QTemporaryDir tmpDir;
         const QString npmPath = path.chopped(4) + ".npm";  // replace .opt→.npm
         const QByteArray npm = makeNpm(128, 128, {});
         QFile nf(npmPath); nf.open(QIODevice::WriteOnly); nf.write(npm);
