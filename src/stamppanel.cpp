@@ -3,10 +3,8 @@
 #include <QPainter>
 #include <QPaintEvent>
 #include <QMouseEvent>
-#include <QScrollBar>
 #include <QVBoxLayout>
 #include <QHBoxLayout>
-#include <QLabel>
 #include <QFileDialog>
 #include <QMessageBox>
 #include <QFile>
@@ -42,28 +40,10 @@ void StampWidget::addStamp(Stamp s)
     emit stampSelected(&m_stamps.back());
 }
 
-void StampWidget::clear()
-{
-    m_stamps.clear();
-    m_selected = -1;
-    updateGeometry();
-    update();
-}
-
 void StampWidget::clearSelection()
 {
     m_selected = -1;
     update();
-}
-
-void StampWidget::setStamps(std::vector<Stamp> stamps)
-{
-    m_stamps   = std::move(stamps);
-    m_selected = m_stamps.empty() ? -1 : 0;
-    updateGeometry();
-    update();
-    if (m_selected >= 0)
-        emit stampSelected(&m_stamps[0]);
 }
 
 const Stamp* StampWidget::selectedStamp() const

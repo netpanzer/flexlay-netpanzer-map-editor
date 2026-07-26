@@ -6,7 +6,6 @@
 #include <QKeyEvent>
 #include <QContextMenuEvent>
 #include <QMenu>
-#include <QInputDialog>
 #include <algorithm>
 #include <cmath>
 #ifndef M_PI

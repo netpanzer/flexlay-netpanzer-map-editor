@@ -52,7 +52,6 @@ public:
 
     // Tile painting
     void setSelectedTile(int id) { m_selectedTile = id; }
-    int  selectedTile()   const  { return m_selectedTile; }
 
     // Rect selection
     QRect selection() const { return m_selection; }
@@ -64,10 +63,8 @@ public:
 
     // View options
     void setShowGrid(bool show) { m_showGrid = show; update(); }
-    bool showGrid()       const  { return m_showGrid; }
 
     // Object access
-    int  selectedObject() const { return m_selectedObj; }
     void deleteSelectedObject();
 
     // Apply a command to the map (apply + push to undo stack).

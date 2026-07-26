@@ -17,12 +17,10 @@ public:
 
     void addStamp(Stamp s);
     void setTileset(const Tileset* ts);
-    void clear();
     void clearSelection();
 
     const Stamp* selectedStamp() const;
     const std::vector<Stamp>& stamps() const { return m_stamps; }
-    void setStamps(std::vector<Stamp> stamps);
     bool  hasHeightForWidth() const override { return true; }
     int   heightForWidth(int w) const override;
 
