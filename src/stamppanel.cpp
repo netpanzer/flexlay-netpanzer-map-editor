@@ -230,9 +230,8 @@ StampPanel::StampPanel(QWidget* parent)
     , m_saveBtn(new QPushButton("Save…"))
     , m_loadBtn(new QPushButton("Load…"))
 {
-    setAllowedAreas(Qt::AllDockWidgetAreas);
-    setFeatures(QDockWidget::DockWidgetMovable | QDockWidget::DockWidgetFloatable
-                | QDockWidget::DockWidgetClosable);
+    setAllowedAreas(Qt::LeftDockWidgetArea | Qt::RightDockWidgetArea);
+    setFeatures(QDockWidget::DockWidgetMovable | QDockWidget::DockWidgetClosable);
 
     m_scroll->setWidget(m_widget);
     m_scroll->setWidgetResizable(false);

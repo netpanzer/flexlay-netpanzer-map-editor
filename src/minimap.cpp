@@ -162,7 +162,8 @@ Minimap::Minimap(QWidget* parent)
     : QDockWidget("Minimap", parent)
     , m_view(new MinimapView())
 {
-    setAllowedAreas(Qt::AllDockWidgetAreas);
+    setAllowedAreas(Qt::LeftDockWidgetArea | Qt::RightDockWidgetArea);
+    setFeatures(QDockWidget::DockWidgetMovable | QDockWidget::DockWidgetClosable);
     setWidget(m_view);
     connect(m_view, &MinimapView::panRequested,
             this,   &Minimap::panRequested);

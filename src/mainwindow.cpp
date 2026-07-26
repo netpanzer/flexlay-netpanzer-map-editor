@@ -53,12 +53,13 @@ static const ToolDef TOOL_DEFS[] = {
 // ---------------------------------------------------------------------------
 // Constructor
 
+// The dock title-bar buttons have no public accessor, so they are reached by
+// the objectName Qt gives them. Only the close button remains — the docks are
+// not floatable, so there is no float button to label.
 static void setDockTooltips(QDockWidget* dock)
 {
     for (auto* btn : dock->findChildren<QAbstractButton*>()) {
-        if (btn->objectName() == "qt_dockwidget_floatbutton")
-            btn->setToolTip("Undock");
-        else if (btn->objectName() == "qt_dockwidget_closebutton")
+        if (btn->objectName() == "qt_dockwidget_closebutton")
             btn->setToolTip("Close");
     }
 }

@@ -255,9 +255,8 @@ TileBrowser::TileBrowser(QWidget* parent)
     , m_scroll(new QScrollArea())
     , m_gotoSpin(new QSpinBox())
 {
-    setAllowedAreas(Qt::AllDockWidgetAreas);
-    setFeatures(QDockWidget::DockWidgetMovable | QDockWidget::DockWidgetFloatable
-                | QDockWidget::DockWidgetClosable);
+    setAllowedAreas(Qt::LeftDockWidgetArea | Qt::RightDockWidgetArea);
+    setFeatures(QDockWidget::DockWidgetMovable | QDockWidget::DockWidgetClosable);
 
     auto* sizeCombo = new QComboBox();
     sizeCombo->addItem("Small (32px)",  32);
