@@ -26,13 +26,9 @@ MapView::MapView(QWidget* parent) : QWidget(parent)
 
 void MapView::setMap(const Map& map)
 {
-    m_map   = map;
+    m_doc.reset(map);
     m_pan   = QPoint(0, 0);
     m_zoom  = 1.0;
-    m_undo.clear();
-    m_redo.clear();
-    m_currentStroke.reset();
-    m_strokeTiles.clear();
     m_selectedObj  = -1;
     m_draggingObj  = false;
     m_panning      = false;
@@ -59,12 +55,12 @@ void MapView::setZoom(double z)
 
 void MapView::fitToWindow()
 {
-    if (!m_map.isValid()) return;
-    const double ws = double(width())  / double(m_map.width  * TILE_SIZE);
-    const double hs = double(height()) / double(m_map.height * TILE_SIZE);
+    if (!m_doc.map().isValid()) return;
+    const double ws = double(width())  / double(m_doc.map().width  * TILE_SIZE);
+    const double hs = double(height()) / double(m_doc.map().height * TILE_SIZE);
     m_zoom = std::min(ws, hs);
-    m_pan  = QPoint((width()  - int(m_map.width  * TILE_SIZE * m_zoom)) / 2,
-                    (height() - int(m_map.height * TILE_SIZE * m_zoom)) / 2);
+    m_pan  = QPoint((width()  - int(m_doc.map().width  * TILE_SIZE * m_zoom)) / 2,
+                    (height() - int(m_doc.map().height * TILE_SIZE * m_zoom)) / 2);
     update();
     emitViewportChanged();
 }
@@ -111,27 +107,27 @@ QPointF MapView::widgetToMapPx(QPoint wpos) const
 
 std::optional<QPoint> MapView::tileAt(QPoint wpos) const
 {
-    if (!m_map.isValid()) return std::nullopt;
+    if (!m_doc.map().isValid()) return std::nullopt;
     const QPointF mp = widgetToMapPx(wpos);
     int tx = int(mp.x()) / TILE_SIZE;
     int ty = int(mp.y()) / TILE_SIZE;
     if (mp.x() < 0) tx--;   // correct negative floor
     if (mp.y() < 0) ty--;
-    if (tx < 0 || ty < 0 || tx >= m_map.width || ty >= m_map.height)
+    if (tx < 0 || ty < 0 || tx >= m_doc.map().width || ty >= m_doc.map().height)
         return std::nullopt;
     return QPoint(tx, ty);
 }
 
 int MapView::objectAt(QPoint wpos) const
 {
-    if (m_map.objects.empty()) return -1;
+    if (m_doc.map().objects.empty()) return -1;
     const QPointF mp = widgetToMapPx(wpos);
     // Enforce a minimum hit radius of 8 screen pixels so objects remain
     // clickable at low zoom levels.
     const double hitR = std::max(TILE_SIZE * 0.6, 8.0 / m_zoom);
     // Iterate in reverse so topmost-drawn object wins
-    for (int i = int(m_map.objects.size()) - 1; i >= 0; --i) {
-        const auto& obj = m_map.objects[size_t(i)];
+    for (int i = int(m_doc.map().objects.size()) - 1; i >= 0; --i) {
+        const auto& obj = m_doc.map().objects[size_t(i)];
         const double cx = (obj.x + 0.5) * TILE_SIZE;
         const double cy = (obj.y + 0.5) * TILE_SIZE;
         const double dx = mp.x() - cx;
@@ -146,27 +142,19 @@ int MapView::objectAt(QPoint wpos) const
 
 void MapView::pushCommand(std::unique_ptr<Command> cmd)
 {
-    // cmd already applied — just record for undo
-    m_undo.push_back(std::move(cmd));
-    m_redo.clear();
+    m_doc.record(std::move(cmd));   // already applied by the caller
 }
 
 void MapView::applyCommand(std::unique_ptr<Command> cmd)
 {
-    cmd->apply(m_map);
-    m_undo.push_back(std::move(cmd));
-    m_redo.clear();
+    m_doc.apply(std::move(cmd));
     update();
     emit mapModified();
 }
 
 void MapView::undo()
 {
-    if (m_undo.empty()) return;
-    auto cmd = std::move(m_undo.back());
-    m_undo.pop_back();
-    cmd->revert(m_map);
-    m_redo.push_back(std::move(cmd));
+    if (!m_doc.undo()) return;
     m_selectedObj = -1;
     emit objectSelectionChanged(-1);
     update();
@@ -175,11 +163,7 @@ void MapView::undo()
 
 void MapView::redo()
 {
-    if (m_redo.empty()) return;
-    auto cmd = std::move(m_redo.back());
-    m_redo.pop_back();
-    cmd->apply(m_map);
-    m_undo.push_back(std::move(cmd));
+    if (!m_doc.redo()) return;
     m_selectedObj = -1;
     emit objectSelectionChanged(-1);
     update();
@@ -192,18 +176,18 @@ void MapView::redo()
 Stamp MapView::captureSelection() const
 {
     Stamp s;
-    if (m_selection.isNull() || !m_map.isValid()) return s;
+    if (m_selection.isNull() || !m_doc.map().isValid()) return s;
     const int x0 = std::max(0, m_selection.x());
     const int y0 = std::max(0, m_selection.y());
-    const int x1 = std::min(m_map.width  - 1, m_selection.right());
-    const int y1 = std::min(m_map.height - 1, m_selection.bottom());
+    const int x1 = std::min(m_doc.map().width  - 1, m_selection.right());
+    const int y1 = std::min(m_doc.map().height - 1, m_selection.bottom());
     s.width  = x1 - x0 + 1;
     s.height = y1 - y0 + 1;
     s.tiles.resize(size_t(s.width * s.height));
     for (int row = 0; row < s.height; ++row)
         for (int col = 0; col < s.width; ++col)
             s.tiles[size_t(row * s.width + col)] =
-                m_map.tiles[size_t((y0 + row) * m_map.width + (x0 + col))];
+                m_doc.map().tiles[size_t((y0 + row) * m_doc.map().width + (x0 + col))];
     return s;
 }
 
@@ -216,27 +200,10 @@ void MapView::setCurrentStamp(const Stamp* stamp)
 
 void MapView::applyStamp(int tx, int ty)
 {
-    if (!m_currentStamp || !m_map.isValid()) return;
-    auto batch = std::make_unique<TileBatch>();
-    for (int row = 0; row < m_currentStamp->height; ++row) {
-        for (int col = 0; col < m_currentStamp->width; ++col) {
-            const int mtx = tx + col;
-            const int mty = ty + row;
-            if (mtx < 0 || mty < 0 || mtx >= m_map.width || mty >= m_map.height)
-                continue;
-            const int idx = mty * m_map.width + mtx;
-            const uint16_t oldVal = m_map.tiles[size_t(idx)];
-            const uint16_t newVal = m_currentStamp->tiles[size_t(row * m_currentStamp->width + col)];
-            if (oldVal == newVal) continue;
-            m_map.tiles[size_t(idx)] = newVal;
-            batch->edits.push_back({idx, oldVal, newVal});
-        }
-    }
-    if (!batch->empty()) {
-        pushCommand(std::move(batch));
-        update();
-        emit mapModified();
-    }
+    if (!m_currentStamp) return;
+    if (!m_doc.applyStamp(*m_currentStamp, tx, ty)) return;
+    update();
+    emit mapModified();
 }
 
 // ---------------------------------------------------------------------------
@@ -257,37 +224,21 @@ void MapView::panToTile(QPointF tilePt)
 
 void MapView::startStroke()
 {
-    m_currentStroke = std::make_unique<TileBatch>();
-    m_strokeTiles.clear();
+    m_doc.beginStroke();
 }
 
 void MapView::addToStroke(int tx, int ty)
 {
-    if (!m_currentStroke) return;
-
-    const int idx = ty * m_map.width + tx;
-    if (m_strokeTiles.contains(idx)) return;
-    m_strokeTiles.insert(idx);
-
-    const uint16_t oldVal = m_map.tiles[size_t(idx)];
-    const uint16_t newVal = uint16_t(m_selectedTile);
-    if (oldVal == newVal) return;
-
-    m_map.tiles[size_t(idx)] = newVal;
-    m_currentStroke->edits.push_back({idx, oldVal, newVal});
-
+    if (!m_doc.addToStroke(ty * m_doc.map().width + tx, uint16_t(m_selectedTile)))
+        return;
     update();
     emit mapModified();
 }
 
 void MapView::commitStroke()
 {
-    if (m_currentStroke && !m_currentStroke->empty()) {
-        pushCommand(std::move(m_currentStroke));
+    if (m_doc.commitStroke())
         emit mapModified();
-    }
-    m_currentStroke.reset();
-    m_strokeTiles.clear();
 }
 
 void MapView::strokeTiles(const std::vector<QPoint>& tiles)
@@ -303,10 +254,10 @@ std::vector<QPoint> MapView::activeShapeTiles() const
 {
     if (m_tool == Tool::EllipsePaint && m_ellipse.active)
         return computeEllipseTiles(m_ellipse.start, m_ellipse.end,
-                                   m_map.width, m_map.height);
+                                   m_doc.map().width, m_doc.map().height);
     if (m_tool == Tool::RectOutline && m_rectOutline.active)
         return computeRectOutlineTiles(m_rectOutline.start, m_rectOutline.end,
-                                       m_map.width, m_map.height);
+                                       m_doc.map().width, m_doc.map().height);
     return {};
 }
 
@@ -315,9 +266,9 @@ std::vector<QPoint> MapView::activeShapeTiles() const
 
 void MapView::deleteSelectedObject()
 {
-    if (m_selectedObj < 0 || m_selectedObj >= int(m_map.objects.size())) return;
+    if (m_selectedObj < 0 || m_selectedObj >= int(m_doc.map().objects.size())) return;
     const int idx     = m_selectedObj;
-    ObjectRef obj     = m_map.objects[size_t(idx)];
+    ObjectRef obj     = m_doc.map().objects[size_t(idx)];
     m_selectedObj     = -1;
     emit objectSelectionChanged(-1);
     applyCommand(std::make_unique<RemoveObject>(idx, std::move(obj)));
@@ -384,7 +335,7 @@ void MapView::drawTiles(QPainter& p, QRect visible) const
     for (int y = visible.top(); y <= visible.bottom(); ++y)
         for (int x = visible.left(); x <= visible.right(); ++x) {
             const QRectF dst(x * TILE_SIZE, y * TILE_SIZE, TILE_SIZE, TILE_SIZE);
-            const int id = m_map.tiles[size_t(y * m_map.width + x)];
+            const int id = m_doc.map().tiles[size_t(y * m_doc.map().width + x)];
             if (haveAtlas)
                 p.drawPixmap(dst, m_atlasPixmap,
                              QRectF(m_tileset->atlasRect(id, ATLAS_COLS)));
@@ -470,8 +421,8 @@ void MapView::drawGrid(QPainter& p, QRect visible) const
 void MapView::drawObjects(QPainter& p) const
 {
     p.setRenderHint(QPainter::Antialiasing);
-    for (int i = 0; i < int(m_map.objects.size()); ++i) {
-        const auto& obj = m_map.objects[size_t(i)];
+    for (int i = 0; i < int(m_doc.map().objects.size()); ++i) {
+        const auto& obj = m_doc.map().objects[size_t(i)];
         const QPointF centre((obj.x + 0.5) * TILE_SIZE, (obj.y + 0.5) * TILE_SIZE);
         // Keep markers clickable-looking when zoomed far out
         const double r = std::max(TILE_SIZE * 0.45, 5.0 / m_zoom);
@@ -528,8 +479,8 @@ void MapView::drawCapturePads(QPainter& p) const
         return QPointF((tx + 0.5) * TILE_SIZE, (ty + 0.5) * TILE_SIZE);
     };
 
-    if (m_selectedObj >= 0 && m_selectedObj < int(m_map.objects.size())) {
-        const auto& obj = m_map.objects[size_t(m_selectedObj)];
+    if (m_selectedObj >= 0 && m_selectedObj < int(m_doc.map().objects.size())) {
+        const auto& obj = m_doc.map().objects[size_t(m_selectedObj)];
         if (obj.type == "outpost")
             pad(tileCentre(obj.x, obj.y), false);
     }
@@ -542,7 +493,7 @@ void MapView::paintEvent(QPaintEvent*)
     QPainter p(this);
     p.fillRect(rect(), QColor(40, 40, 40));
 
-    if (!m_map.isValid()) {
+    if (!m_doc.map().isValid()) {
         p.setPen(Qt::gray);
         p.drawText(rect(), Qt::AlignCenter,
                    "No map loaded.\nUse File → Open to load a .npm file.");
@@ -560,8 +511,8 @@ void MapView::paintEvent(QPaintEvent*)
     const QRectF area = p.transform().inverted().mapRect(QRectF(rect()));
     const QRect visible(QPoint(std::max(0, int(area.left() / TILE_SIZE)),
                                std::max(0, int(area.top()  / TILE_SIZE))),
-                        QPoint(std::min(m_map.width  - 1, int(area.right()  / TILE_SIZE)),
-                               std::min(m_map.height - 1, int(area.bottom() / TILE_SIZE))));
+                        QPoint(std::min(m_doc.map().width  - 1, int(area.right()  / TILE_SIZE)),
+                               std::min(m_doc.map().height - 1, int(area.bottom() / TILE_SIZE))));
 
     drawTiles(p, visible);
     drawStampGhost(p);
@@ -575,7 +526,7 @@ void MapView::paintEvent(QPaintEvent*)
     // Map border
     p.setBrush(Qt::NoBrush);
     p.setPen(QPen(QColor(200, 200, 200), 0));
-    p.drawRect(QRectF(0, 0, m_map.width * TILE_SIZE, m_map.height * TILE_SIZE));
+    p.drawRect(QRectF(0, 0, m_doc.map().width * TILE_SIZE, m_doc.map().height * TILE_SIZE));
     p.restore();
 }
 
@@ -636,7 +587,7 @@ void MapView::mousePressEvent(QMouseEvent* ev)
     }
     case Tool::TilePick: {
         if (tile) {
-            const int id = m_map.tiles[size_t(tile->y() * m_map.width + tile->x())];
+            const int id = m_doc.map().tiles[size_t(tile->y() * m_doc.map().width + tile->x())];
             m_selectedTile = id;
             emit tilePicked(id);
             setTool(Tool::TilePaint);
@@ -680,7 +631,7 @@ void MapView::mousePressEvent(QMouseEvent* ev)
             // Count existing objects of this type for default name
             if (obj.type == "outpost") {
                 int n = 0;
-                for (const auto& o : m_map.objects)
+                for (const auto& o : m_doc.map().objects)
                     if (o.type == "outpost") ++n;
                 obj.name = QString("Outpost#%1").arg(n + 1);
             }
@@ -699,8 +650,8 @@ void MapView::mousePressEvent(QMouseEvent* ev)
         }
         if (hit >= 0) {
             m_draggingObj  = true;
-            m_objDragOrigX = m_map.objects[size_t(hit)].x;
-            m_objDragOrigY = m_map.objects[size_t(hit)].y;
+            m_objDragOrigX = m_doc.map().objects[size_t(hit)].x;
+            m_objDragOrigY = m_doc.map().objects[size_t(hit)].y;
         }
         break;
     }
@@ -783,14 +734,14 @@ void MapView::mouseMoveEvent(QMouseEvent* ev)
 
     if (m_tool == Tool::SelectObject && m_draggingObj &&
         m_selectedObj >= 0 && dragging && tile) {
-        m_map.objects[size_t(m_selectedObj)].x = tile->x();
-        m_map.objects[size_t(m_selectedObj)].y = tile->y();
+        m_doc.map().objects[size_t(m_selectedObj)].x = tile->x();
+        m_doc.map().objects[size_t(m_selectedObj)].y = tile->y();
         update();
     }
 
     // Status bar hover info
     if (tile) {
-        const int id = m_map.tiles[size_t(tile->y() * m_map.width + tile->x())];
+        const int id = m_doc.map().tiles[size_t(tile->y() * m_doc.map().width + tile->x())];
         emit tileHovered(tile->x(), tile->y(), id);
     }
 }
@@ -826,8 +777,8 @@ void MapView::mouseReleaseEvent(QMouseEvent* ev)
         if (m_tool == Tool::RectFill && m_rectFilling) {
             m_rectFilling = false;
             const QRect r = m_rectFillPreview.intersected(
-                QRect(0, 0, m_map.width, m_map.height));
-            if (r.isValid() && m_map.isValid()) {
+                QRect(0, 0, m_doc.map().width, m_doc.map().height));
+            if (r.isValid() && m_doc.map().isValid()) {
                 startStroke();
                 for (int y = r.top(); y <= r.bottom(); ++y)
                     for (int x = r.left(); x <= r.right(); ++x)
@@ -839,12 +790,12 @@ void MapView::mouseReleaseEvent(QMouseEvent* ev)
         }
 
         if (m_tool == Tool::SelectObject && m_draggingObj && m_selectedObj >= 0) {
-            const auto& obj = m_map.objects[size_t(m_selectedObj)];
+            const auto& obj = m_doc.map().objects[size_t(m_selectedObj)];
             if (obj.x != m_objDragOrigX || obj.y != m_objDragOrigY) {
                 // Record the move: revert map first, then apply via command
                 const int newX = obj.x, newY = obj.y;
-                m_map.objects[size_t(m_selectedObj)].x = m_objDragOrigX;
-                m_map.objects[size_t(m_selectedObj)].y = m_objDragOrigY;
+                m_doc.map().objects[size_t(m_selectedObj)].x = m_objDragOrigX;
+                m_doc.map().objects[size_t(m_selectedObj)].y = m_objDragOrigY;
                 applyCommand(std::make_unique<MoveObject>(
                     m_selectedObj, m_objDragOrigX, m_objDragOrigY, newX, newY));
             }
@@ -907,7 +858,7 @@ void MapView::contextMenuEvent(QContextMenuEvent* ev)
     }
 
     QMenu menu(this);
-    const auto& obj = m_map.objects[size_t(hit)];
+    const auto& obj = m_doc.map().objects[size_t(hit)];
     menu.setTitle(obj.type == "outpost" ? obj.name : "Spawn point");
 
     if (obj.type == "outpost") {
@@ -931,7 +882,7 @@ void MapView::contextMenuEvent(QContextMenuEvent* ev)
 
 void MapView::emitViewportChanged()
 {
-    if (!m_map.isValid() || m_zoom <= 0) return;
+    if (!m_doc.map().isValid() || m_zoom <= 0) return;
     const double invZoom = 1.0 / m_zoom;
     const double tw = width()  * invZoom / TILE_SIZE;
     const double th = height() * invZoom / TILE_SIZE;

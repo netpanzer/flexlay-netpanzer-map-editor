@@ -27,6 +27,7 @@ rcc_files = qt5.preprocess(qresources : ['src/resources.qrc'])
 editor_sources = [
   'src/main.cpp',
   'src/maploader.cpp',
+  'src/document.cpp',
   'src/mapview.cpp',
   'src/tlsloader.cpp',
   'src/tilebrowser.cpp',

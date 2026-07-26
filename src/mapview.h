@@ -12,6 +12,7 @@
 #include "objects.h"
 #include "tlsloader.h"
 #include "commands.h"
+#include "document.h"
 #include "stamp.h"
 
 enum class Tool {
@@ -35,8 +36,8 @@ public:
     explicit MapView(QWidget* parent = nullptr);
 
     void setMap(const Map& map);
-    const Map& map() const { return m_map; }
-    Map&       map()       { return m_map; }
+    const Map& map() const { return m_doc.map(); }
+    Map&       map()       { return m_doc.map(); }
 
     void setTileset(const Tileset* ts);
     const Tileset* tileset() const { return m_tileset; }
@@ -77,8 +78,8 @@ public:
     // Undo / redo
     void undo();
     void redo();
-    bool canUndo() const { return !m_undo.empty(); }
-    bool canRedo() const { return !m_redo.empty(); }
+    bool canUndo() const { return m_doc.canUndo(); }
+    bool canRedo() const { return m_doc.canRedo(); }
 
 signals:
     void tileHovered(int tileX, int tileY, int tileId);
@@ -136,8 +137,10 @@ private:
 
     void emitViewportChanged();
 
-    // Map / rendering
-    Map            m_map;
+    // Map + undo history
+    Document       m_doc;
+
+    // Rendering
     double         m_zoom     = 1.0;
     QPoint         m_pan;
     bool           m_showGrid = true;
@@ -196,10 +199,6 @@ private:
     QPoint m_lastMouse;
 
     void applyStamp(int tx, int ty);
-
-    // Tile stroke state
-    std::unique_ptr<TileBatch> m_currentStroke;
-    QSet<int>                  m_strokeTiles; // indices painted this stroke
 
     // Object drag state
     bool m_draggingObj  = false;
