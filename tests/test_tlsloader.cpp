@@ -212,16 +212,22 @@ private slots:
     // -----------------------------------------------------------------------
     void testTruncatedFile()
     {
-        // Cut the file short — loader should either fail or clamp tile count
+        // The header still claims 100 tiles; the loader must clamp to the
+        // pixel data actually present rather than read past the buffer.
         const QByteArray full = makeTls(100);
         const QByteArray truncated = full.left(full.size() / 2);
         const QString path = writeTempFile(truncated, ".tls");
 
         Tileset ts;
-        // Should either fail or load fewer tiles — not crash
-        if (ts.load(path))
-            QVERIFY(ts.tileCount() < 100);
-        // No crash → pass
+        QVERIFY(ts.load(path));
+
+        const int pxOffset = TLS_OFF_HEADERS + 100 * 3;
+        const int expected = (truncated.size() - pxOffset) / (32 * 32);
+        QVERIFY(expected > 0 && expected < 100);
+        QCOMPARE(ts.tileCount(), expected);
+
+        // The tiles that did survive must still decode
+        QCOMPARE(ts.tileImage(expected - 1).width(), 32);
     }
 
     // -----------------------------------------------------------------------
