@@ -31,7 +31,6 @@
 #include <QPushButton>
 #include <QAbstractButton>
 #include <QHBoxLayout>
-#include <cmath>
 
 static constexpr int MAX_RECENT = 8;
 

@@ -297,7 +297,7 @@ private slots:
     }
 
     // -----------------------------------------------------------------------
-    void testOptWrite_roundTrip()
+    void testObjectWrite_roundTrip()
     {
         Map orig;
         orig.width  = 16;
