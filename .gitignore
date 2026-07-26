@@ -11,3 +11,7 @@
 # Python bytecode cache
 __pycache__/
 *.pyc
+
+# Inno Setup output (OutputDir points at the repo root)
+/netpanzer-editor-*-setup.exe
+/netpanzer-editor-*-setup.exe.sha256sum
