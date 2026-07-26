@@ -22,6 +22,10 @@ public:
     // original (with a .bak backup). Returns false on any failure.
     static bool saveNpmVerified(const QString& destPath, const Map& m, bool replace = false);
 
+    // The intermediate file saveNpmVerified() writes before replacing destPath.
+    // Callers use this to report the path to the user.
+    static QString verifiedTempPath(const QString& destPath);
+
 private:
     static Map  loadNpm(const QByteArray& data, const QString& path);
     static Map  loadText(const QByteArray& data);

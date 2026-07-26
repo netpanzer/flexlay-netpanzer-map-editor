@@ -526,7 +526,7 @@ void MainWindow::onSave()
     const Map m = mapWithThumbnail(m_view->map(), m_view->tileset());
 
     if (m_currentFile.endsWith(".npm", Qt::CaseInsensitive)) {
-        const QString newPath = m_currentFile + ".new";
+        const QString newPath = MapLoader::verifiedTempPath(m_currentFile);
         if (!MapLoader::saveNpmVerified(m_currentFile, m, false)) {
             QMessageBox::warning(this, "Save failed",
                                  "Failed to write or verify:\n" + newPath);

@@ -318,11 +318,16 @@ bool MapLoader::saveNpm(const QString& path, const Map& m)
 // ---------------------------------------------------------------------------
 // Verified save
 
+QString MapLoader::verifiedTempPath(const QString& destPath)
+{
+    return destPath.endsWith(".npm", Qt::CaseInsensitive)
+           ? destPath + ".new"
+           : destPath;
+}
+
 bool MapLoader::saveNpmVerified(const QString& destPath, const Map& m, bool replace)
 {
-    const QString newPath = destPath.endsWith(".npm", Qt::CaseInsensitive)
-                            ? destPath + ".new"
-                            : destPath;
+    const QString newPath = verifiedTempPath(destPath);
 
     if (!saveNpm(newPath, m))
         return false;
