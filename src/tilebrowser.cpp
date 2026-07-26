@@ -67,7 +67,7 @@ QSize TileBrowserWidget::sizeHint() const
 {
     if (!m_tileset || !m_tileset->isValid())
         return QSize(4 * m_tileSize, 200);
-    const int c    = std::max(1, 4);
+    const int c    = 4;  // hint assumes a 4-wide dock; cols() drives actual layout
     const int rows = (m_tileset->tileCount() + c - 1) / c;
     return QSize(c * m_tileSize, rows * m_tileSize);
 }
