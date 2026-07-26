@@ -45,6 +45,25 @@ jobs:
       - name: Add Qt to PATH
         run: echo "${{ env.QT_DIR }}\${{ env.QT_VERSION }}\msvc2019_64\bin" | Out-File -Append -FilePath $env:GITHUB_PATH
 
+      - name: Patch Qt 5.15.2 for MSVC 19.38+
+        # Qt 5.15.2 predates upstream's "#if _MSC_VER < 1938" guard, so its
+        # containers still call stdext::make_checked_array_iterator, which the
+        # MSVC STL removed in VS 2022 17.8. Deleting the two stdext defines
+        # lets Qt's own "#ifndef" fallback lower them to (x) — the same result
+        # upstream's guard produces on new compilers. Upstream fixed this in a
+        # later 5.15.x, but open-source binaries stop at 5.15.2.
+        shell: pwsh
+        run: |
+          $f = "$env:QT_DIR\$env:QT_VERSION\msvc2019_64\include\QtCore\qcompilerdetection.h"
+          $before = Get-Content $f
+          $after = $before | Where-Object { $_ -notmatch 'define QT_MAKE_(UN)?CHECKED_ARRAY_ITERATOR.*stdext' }
+          if ($before.Count -ne $after.Count) {
+            Set-Content -Path $f -Value $after
+            Write-Host "Removed $($before.Count - $after.Count) stdext define(s)"
+          } else {
+            Write-Host "No stdext defines present; nothing to patch"
+          }
+
       - name: Install Meson and Ninja
         # Pin to <1.11 to avoid mesonbuild/meson#15705: Qt tool detection
         # regression in 1.11.0 that crashes with 'NoneType has no attribute
