@@ -86,6 +86,17 @@ test_exe = executable('test_maploader',
 test('maploader', test_exe,
   env : ['LSAN_OPTIONS=suppressions=' + meson.project_source_root() / 'lsan.supp'])
 
+doc_moc = qt5.preprocess(moc_sources : ['tests/test_document.cpp'])
+
+doc_exe = executable('test_document',
+  sources : ['tests/test_document.cpp', 'src/document.cpp'] + doc_moc,
+  dependencies : qt5_test_dep,
+  include_directories : include_directories('src'),
+)
+
+test('document', doc_exe,
+  env : ['LSAN_OPTIONS=suppressions=' + meson.project_source_root() / 'lsan.supp'])
+
 tls_moc = qt5.preprocess(moc_sources : ['tests/test_tlsloader.cpp'])
 
 qt5_test_gui_dep = dependency('qt5', modules : ['Core', 'Gui', 'Test'])
