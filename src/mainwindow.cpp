@@ -72,24 +72,7 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent)
     m_view = new MapView(this);
     setCentralWidget(m_view);
 
-    m_tileBrowser = new TileBrowser(this);
-    // restoreState() matches docks by objectName and silently skips any without
-    // one, so these must be set and must stay stable across releases.
-    m_tileBrowser->setObjectName("tileBrowserDock");
-    addDockWidget(Qt::LeftDockWidgetArea, m_tileBrowser);
-    setDockTooltips(m_tileBrowser);
-    m_tileBrowser->hide();  // hidden by default, opened from View menu
-
-    m_stampPanel = new StampPanel(this);
-    m_stampPanel->setObjectName("stampPanelDock");
-    addDockWidget(Qt::LeftDockWidgetArea, m_stampPanel);
-    setDockTooltips(m_stampPanel);
-
-    m_minimap = new Minimap(this);
-    m_minimap->setObjectName("minimapDock");
-    addDockWidget(Qt::RightDockWidgetArea, m_minimap);
-    setDockTooltips(m_minimap);
-
+    createDocks();
     setupMenus();
     setupToolbar();
     setupStatusBar();
@@ -113,6 +96,33 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent)
         m_stampPanel->loadFromDirectory(candidate);
     }
 
+    connectSignals();
+}
+
+void MainWindow::createDocks()
+{
+    m_tileBrowser = new TileBrowser(this);
+    // restoreState() matches docks by objectName and silently skips any without
+    // one, so these must be set and must stay stable across releases.
+    m_tileBrowser->setObjectName("tileBrowserDock");
+    addDockWidget(Qt::LeftDockWidgetArea, m_tileBrowser);
+    setDockTooltips(m_tileBrowser);
+    m_tileBrowser->hide();  // hidden by default, opened from View menu
+
+    m_stampPanel = new StampPanel(this);
+    m_stampPanel->setObjectName("stampPanelDock");
+    addDockWidget(Qt::LeftDockWidgetArea, m_stampPanel);
+    setDockTooltips(m_stampPanel);
+
+    m_minimap = new Minimap(this);
+    m_minimap->setObjectName("minimapDock");
+    addDockWidget(Qt::RightDockWidgetArea, m_minimap);
+    setDockTooltips(m_minimap);
+
+}
+
+void MainWindow::connectSignals()
+{
     connect(m_view, &MapView::tileHovered,            this, &MainWindow::onTileHovered);
     connect(m_view, &MapView::mapModified,            this, &MainWindow::onMapModified);
     connect(m_view, &MapView::objectSelectionChanged, this, &MainWindow::onObjectSelectionChanged);
@@ -166,6 +176,15 @@ MainWindow::MainWindow(QWidget* parent) : QMainWindow(parent)
 
 void MainWindow::setupMenus()
 {
+    setupFileMenu();
+    setupEditMenu();
+    setupToolsMenu();
+    setupViewMenu();
+    setupHelpMenu();
+}
+
+void MainWindow::setupFileMenu()
+{
     // File
     QMenu* file = menuBar()->addMenu("&File");
 
@@ -201,7 +220,10 @@ void MainWindow::setupMenus()
     QAction* quitAct = file->addAction("&Quit");
     quitAct->setShortcut(QKeySequence::Quit);
     connect(quitAct, &QAction::triggered, this, &QWidget::close);
+}
 
+void MainWindow::setupEditMenu()
+{
     // Edit
     QMenu* edit = menuBar()->addMenu("&Edit");
 
@@ -221,7 +243,10 @@ void MainWindow::setupMenus()
     delObjAct->setShortcut(Qt::Key_Delete);
     connect(delObjAct, &QAction::triggered,
             m_view, &MapView::deleteSelectedObject);
+}
 
+void MainWindow::setupToolsMenu()
+{
     // Tools
     QMenu* tools = menuBar()->addMenu("&Tools");
     m_toolGroup = new QActionGroup(this);
@@ -237,7 +262,10 @@ void MainWindow::setupMenus()
         connect(a, &QAction::triggered, this, [this, t = d.tool]() { onSetTool(t); });
     }
     m_toolGroup->actions().first()->setChecked(true);
+}
 
+void MainWindow::setupViewMenu()
+{
     // View
     QMenu* view = menuBar()->addMenu("&View");
 
@@ -271,7 +299,10 @@ void MainWindow::setupMenus()
     auto* minimapAct = m_minimap->toggleViewAction();
     minimapAct->setText("&Minimap");
     view->addAction(minimapAct);
+}
 
+void MainWindow::setupHelpMenu()
+{
     QMenu* help = menuBar()->addMenu("&Help");
 
     QAction* contentsAct = help->addAction("&Contents");

@@ -44,7 +44,14 @@ protected:
     void closeEvent(QCloseEvent* e) override;
 
 private:
+    void createDocks();
+    void connectSignals();
     void setupMenus();
+    void setupFileMenu();
+    void setupEditMenu();
+    void setupToolsMenu();
+    void setupViewMenu();
+    void setupHelpMenu();
     void setupToolbar();
     void setupStatusBar();
     void setCurrentFile(const QString& path);
