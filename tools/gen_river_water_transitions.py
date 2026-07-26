@@ -19,9 +19,11 @@ A .tls.bak backup is written beside each .tls before any changes are made.
 import argparse
 import pathlib
 import struct
-from collections import Counter
 
 import numpy as np
+
+import tlsfile
+from tlsfile import TILE_PIXELS, TLS_OFF_HEADERS, TLS_OFF_TILE_COUNT
 
 RIVER_IDS  = [9467, 9468, 9469]
 WATER_IDS  = [10967, 10968, 10969]
@@ -31,16 +33,11 @@ DEFAULT_BASE = 11961
 # All variants should reach 11961 before transition tiles are added.
 # Desert is missing the empty placeholder tile at 11960; we insert it here
 # so transition tiles land at 11961-11963 across all variants.
-NOTILE_PIXELS = bytes([1] * 1024)  # near-black placeholder, matches other variants
+NOTILE_PIXELS = bytes([1] * TILE_PIXELS)  # near-black placeholder, matches other variants
 
 
-def load_act(wads: pathlib.Path) -> np.ndarray:
-    return np.frombuffer((wads / 'netp.act').read_bytes()[:768], dtype=np.uint8).reshape(256, 3)
-
-
-def extract_tile_rgb(data: bytes, tid: int, count: int, act_pal: np.ndarray) -> np.ndarray:
-    px_base = 840 + count * 3
-    raw = np.frombuffer(data[px_base + tid*1024 : px_base + tid*1024 + 1024], dtype=np.uint8)
+def extract_tile_rgb(data: bytes, tid: int, act_pal: np.ndarray) -> np.ndarray:
+    raw = np.frombuffer(tlsfile.tile_pixels(data, tid), dtype=np.uint8)
     return act_pal[raw].reshape(32, 32, 3).astype(np.float32)
 
 
@@ -54,42 +51,24 @@ def blend_transition(river: np.ndarray, water: np.ndarray) -> np.ndarray:
     return np.clip(out, 0, 255).astype(np.uint8)
 
 
-def quantize(rgb: np.ndarray, allowed_indices: list, act_pal: np.ndarray) -> bytes:
-    sub_pal = act_pal[allowed_indices].astype(np.int32)
-    pixels  = rgb.reshape(-1, 3).astype(np.int32)
-    diff    = pixels[:, np.newaxis, :] - sub_pal[np.newaxis, :, :]
-    nearest = (diff * diff).sum(axis=2).argmin(axis=1)
-    return bytes(np.array(allowed_indices, dtype=np.uint8)[nearest].tobytes())
-
-
-def add_tile(data: bytearray, pixels: bytes) -> int:
-    count     = struct.unpack_from('<H', data, 70)[0]
-    px_offset = 840 + count * 3
-    avg_col   = Counter(pixels).most_common(1)[0][0]
-    header    = bytes([0, 0, avg_col])
-    new_data  = data[:px_offset] + header + bytes(data[px_offset:]) + pixels
-    struct.pack_into('<H', new_data, 70, count + 1)
-    data[:]   = new_data
-    return count  # new tile id
-
-
 def strip_to(data: bytearray, target: int):
-    count = struct.unpack_from('<H', data, 70)[0]
+    count = tlsfile.tile_count(data)
     if count <= target:
         return
+    px_base  = TLS_OFF_HEADERS + count * 3
     new_data = bytearray(
-        bytes(data[:840])
-        + bytes(data[840 : 840 + target * 3])
-        + bytes(data[840 + count * 3 : 840 + count * 3 + target * 1024])
+        bytes(data[:TLS_OFF_HEADERS])
+        + bytes(data[TLS_OFF_HEADERS : TLS_OFF_HEADERS + target * 3])
+        + bytes(data[px_base : px_base + target * TILE_PIXELS])
     )
-    struct.pack_into('<H', new_data, 70, target)
+    struct.pack_into('<H', new_data, TLS_OFF_TILE_COUNT, target)
     data[:] = new_data
 
 
 def process_variant(tls_path: pathlib.Path, act_pal: np.ndarray):
     name = tls_path.parent.name
     data = bytearray(tls_path.read_bytes())
-    count = struct.unpack_from('<H', data, 70)[0]
+    count = tlsfile.tile_count(data)
 
     base = BASE_COUNTS.get(name, DEFAULT_BASE)
     if count > base:
@@ -98,40 +77,23 @@ def process_variant(tls_path: pathlib.Path, act_pal: np.ndarray):
 
     # Ensure all variants are at DEFAULT_BASE before adding transition tiles
     if count < DEFAULT_BASE:
-        add_tile(data, NOTILE_PIXELS)
-        count = struct.unpack_from('<H', data, 70)[0]
+        tlsfile.append_tile(data, NOTILE_PIXELS)
+        count = tlsfile.tile_count(data)
 
     # Palette indices used by the river and water tiles — keeps new tiles
     # visually consistent with their neighbours
-    allowed = set()
-    for tid in RIVER_IDS + WATER_IDS:
-        if tid < count:
-            px_base = 840 + count * 3
-            allowed.update(data[px_base + tid * 1024 : px_base + tid * 1024 + 1024])
-    allowed_list = sorted(allowed)
-
-    # Compute median interior water colour (excluding dark bank/edge pixels).
-    cur = struct.unpack_from('<H', data, 70)[0]
-    water_pixels = []
-    for w_id in WATER_IDS:
-        if w_id < cur:
-            rgb = extract_tile_rgb(bytes(data), w_id, cur, act_pal)
-            mask = rgb.mean(axis=2) >= 15
-            water_pixels.append(rgb[mask])
-    water_fill = np.median(np.concatenate(water_pixels), axis=0) if water_pixels else np.array([10., 10., 10.])
+    allowed_list = tlsfile.indices_used_by(data, RIVER_IDS + WATER_IDS)
 
     new_ids = []
     for r_id, w_id in zip(RIVER_IDS, WATER_IDS):
         if r_id >= count or w_id >= count:
             print(f'  {name}: skipping {r_id}/{w_id} — out of range')
             continue
-        cur = struct.unpack_from('<H', data, 70)[0]
-        river = extract_tile_rgb(bytes(data), r_id, cur, act_pal)
-        water = extract_tile_rgb(bytes(data), w_id, cur, act_pal)
+        river = extract_tile_rgb(bytes(data), r_id, act_pal)
+        water = extract_tile_rgb(bytes(data), w_id, act_pal)
         blended = blend_transition(river, water)
-        pixels  = quantize(blended, allowed_list, act_pal)
-        new_id  = add_tile(data, pixels)
-        new_ids.append(new_id)
+        pixels  = tlsfile.quantize(blended, act_pal, allowed_list)
+        new_ids.append(tlsfile.append_tile(data, pixels))
 
     tls_path.with_suffix('.tls.bak').write_bytes(tls_path.read_bytes())
     tls_path.write_bytes(data)
@@ -146,7 +108,9 @@ def main():
     args = ap.parse_args()
 
     wads = pathlib.Path(args.wads)
-    act_pal = load_act(wads)
+    act_pal = tlsfile.load_act_palette(wads)
+    if act_pal is None:
+        ap.error(f'netp.act not found in or above {wads}')
 
     variants = sorted((wads / 'summer12mb').glob('*/summer12mb.tls'))
     if not variants:

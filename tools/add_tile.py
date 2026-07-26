@@ -2,8 +2,8 @@
 """Append a 32×32 PNG as a new tile in a netPanzer .tls file.
 
 The PNG must be 32×32 pixels.  It may be RGB, RGBA, or palette-indexed (mode P).
-The script quantizes the image to the palette embedded in the .tls file, so no
-manual indexed-mode conversion is needed — exporting as plain RGB from GIMP works.
+The script quantizes the image to the tileset's palette, so no manual
+indexed-mode conversion is needed — exporting as plain RGB from GIMP works.
 
 Usage:
     python3 tools/add_tile.py --tls path/to/summer12mb.tls --tile mytile.png
@@ -13,74 +13,16 @@ A .bak backup of the original file is written before any changes are made.
 """
 
 import argparse
-import struct
 import sys
-from collections import Counter
 from pathlib import Path
 
 try:
     from PIL import Image
-    import numpy as np
 except ImportError:
     sys.exit("Pillow and numpy are required:  pip install Pillow numpy")
 
-TLS_OFF_TILE_COUNT = 70
-TLS_OFF_HEADERS    = 840   # 72-byte fixed header + 768-byte palette
-TLS_OFF_PALETTE    = 72    # 768 bytes = 256 × 3 RGB
-TILE_PIXELS        = 32 * 32  # 1024 bytes of palette indices per tile
-
-
-def _load_act_palette(tls_path: Path) -> np.ndarray:
-    """Load netp.act by walking up from the .tls file, mirroring the editor's logic."""
-    import os
-    d = tls_path.parent
-    for _ in range(6):
-        candidate = d / "netp.act"
-        if candidate.exists():
-            data = candidate.read_bytes()
-            return np.frombuffer(data[:768], dtype=np.uint8).reshape(256, 3)
-        d = d.parent
-    return None
-
-
-def quantize_to_tileset_palette(img: Image.Image, tls_data: bytes,
-                                 tls_path: Path = None,
-                                 neighbor_ids: list = None) -> bytes:
-    """Quantize using netp.act (the palette the editor uses).
-
-    If neighbor_ids is given, restricts to palette indices actually used by
-    those tiles so the result blends naturally with surrounding tiles.
-    """
-    act_pal = None
-    if tls_path is not None:
-        act_pal = _load_act_palette(tls_path)
-
-    if act_pal is None:
-        # Fall back to TLS embedded palette
-        act_pal = np.frombuffer(
-            tls_data[TLS_OFF_PALETTE : TLS_OFF_PALETTE + 768], dtype=np.uint8
-        ).reshape(256, 3)
-
-    if neighbor_ids:
-        count = struct.unpack_from("<H", tls_data, TLS_OFF_TILE_COUNT)[0]
-        px_base = TLS_OFF_HEADERS + count * 3
-        allowed = set()
-        for tid in neighbor_ids:
-            if 0 <= tid < count:
-                raw = tls_data[px_base + tid * TILE_PIXELS : px_base + (tid + 1) * TILE_PIXELS]
-                allowed.update(raw)
-        allowed_list = sorted(allowed)
-    else:
-        allowed_list = list(range(256))
-
-    sub_pal = act_pal[allowed_list].astype(np.int32)  # (N, 3)
-    pixels   = np.array(img.convert("RGB"), dtype=np.int32).reshape(-1, 3)
-
-    diff    = pixels[:, np.newaxis, :] - sub_pal[np.newaxis, :, :]
-    nearest = (diff * diff).sum(axis=2).argmin(axis=1)
-    indices = np.array(allowed_list, dtype=np.uint8)[nearest]
-
-    return bytes(indices.tobytes())
+import tlsfile
+from tlsfile import TILE_PIXELS, TLS_OFF_HEADERS
 
 
 def load_tile_pixels(png_path: Path, tls_data: bytes, tls_path: Path = None,
@@ -88,11 +30,9 @@ def load_tile_pixels(png_path: Path, tls_data: bytes, tls_path: Path = None,
     img = Image.open(png_path)
     if img.size != (32, 32):
         sys.exit(f"Tile must be 32×32 pixels, got {img.size[0]}×{img.size[1]}")
-    return quantize_to_tileset_palette(img, tls_data, tls_path, neighbor_ids)
-
-
-def dominant_index(pixels: bytes) -> int:
-    return Counter(pixels).most_common(1)[0][0]
+    palette = tlsfile.resolve_palette(tls_data, tls_path)
+    allowed = tlsfile.indices_used_by(tls_data, neighbor_ids) if neighbor_ids else None
+    return tlsfile.quantize_image(img, palette, allowed)
 
 
 def main():
@@ -120,35 +60,23 @@ def main():
     if not tile_path.exists():
         sys.exit(f"Not found: {tile_path}")
 
-    data = bytearray(tls_path.read_bytes())
+    original = tls_path.read_bytes()
+    data     = bytearray(original)
 
-    tile_count = struct.unpack_from("<H", data, TLS_OFF_TILE_COUNT)[0]
-    px_offset  = TLS_OFF_HEADERS + tile_count * 3
-    expected   = px_offset + tile_count * TILE_PIXELS
-
+    count    = tlsfile.tile_count(data)
+    expected = TLS_OFF_HEADERS + count * 3 + count * TILE_PIXELS
     if len(data) < expected:
         sys.exit(
             f"File too short: expected at least {expected} bytes for "
-            f"{tile_count} tiles, got {len(data)}"
+            f"{count} tiles, got {len(data)}"
         )
 
     pixels  = load_tile_pixels(tile_path, data, tls_path)
-    avg_col = dominant_index(pixels)
-    header  = bytes([args.attrib & 0xFF, args.move_value & 0xFF, avg_col])
+    avg_col = tlsfile.dominant_index(pixels)
 
-    new_count = tile_count + 1
-    new_data = (
-        data[:px_offset]   # fixed header + all existing tile headers
-        + header            # new tile header
-        + data[px_offset:] # existing pixel data (unchanged)
-        + pixels            # new tile pixels
-    )
-    struct.pack_into("<H", new_data, TLS_OFF_TILE_COUNT, new_count)
-
-    new_id = tile_count  # 0-based; was the old count
     print(f"Tileset    : {tls_path}")
     print(f"New tile   : {tile_path}")
-    print(f"Tile count : {tile_count} → {new_count}  (new tile id = {new_id})")
+    print(f"Tile count : {count} → {count + 1}  (new tile id = {count})")
     print(f"Header     : attrib={args.attrib}  move_value={args.move_value}"
           f"  avg_color={avg_col}")
 
@@ -156,11 +84,13 @@ def main():
         print("Dry run — nothing written.")
         return
 
+    tlsfile.append_tile(data, pixels, args.attrib, args.move_value)
+
     backup = tls_path.with_suffix(tls_path.suffix + ".bak")
-    backup.write_bytes(data)
+    backup.write_bytes(original)
     print(f"Backup     : {backup}")
 
-    tls_path.write_bytes(new_data)
+    tls_path.write_bytes(data)
     print("Done.")
 
 
