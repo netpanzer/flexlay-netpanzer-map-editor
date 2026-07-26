@@ -96,13 +96,18 @@ def append_tile(data: bytearray, pixels: bytes,
     """Append a tile, fixing up the count. Returns the new tile's 0-based id.
 
     The new header must be spliced in after the existing headers rather than
-    at the end, since all headers precede all pixel data.
+    at the end, since all headers precede all pixel data. The new pixels go
+    at the end of the pixel data, not the end of the file: the tilesets that
+    ship with the game carry a trailing byte past the last tile, and appending
+    after it would shift the new tile by one byte.
     """
     count     = tile_count(data)
     px_offset = TLS_OFF_HEADERS + count * 3
+    px_end    = px_offset + count * TILE_PIXELS
     header    = bytes([attrib & 0xFF, move_value & 0xFF, dominant_index(pixels)])
     new_data  = bytearray(
-        bytes(data[:px_offset]) + header + bytes(data[px_offset:]) + pixels
+        bytes(data[:px_offset]) + header + bytes(data[px_offset:px_end])
+        + pixels + bytes(data[px_end:])
     )
     struct.pack_into("<H", new_data, TLS_OFF_TILE_COUNT, count + 1)
     data[:] = new_data
